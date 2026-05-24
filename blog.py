@@ -8,11 +8,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
 import os
-from selenium.webdriver.common.action_chains import ActionChains
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
@@ -21,7 +21,6 @@ def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
     genai.configure(api_key=api_key)
     
-    # 최신 제미나이 2.5 플래시 모델 적용
     model = genai.GenerativeModel('gemini-2.5-flash')
     
     prompt = f"""
@@ -40,7 +39,8 @@ def get_blog_content(topic):
         content = json.loads(response.text)
         return content
     except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        clean_text = response.text.replace("```json", "").replace("
+```", "").strip()
         return json.loads(clean_text)
 
 # ---------------------------------------------------------
@@ -52,7 +52,7 @@ def post_to_naver(data):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080") # 화면 잘림 방지
+    chrome_options.add_argument("--window-size=1920,1080")
     
     # 봇 탐지 우회(Stealth) 옵션
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -60,14 +60,12 @@ def post_to_naver(data):
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
     
-    # Streamlit 클라우드 크롬 경로 설정
     chrome_options.binary_location = "/usr/bin/chromium"
     service = Service("/usr/bin/chromedriver")
     
     driver = webdriver.Chrome(service=service, options=chrome_options)
     
-    try: # <--- 여기서 시작된 try 구문입니다.
-        # Secrets에서 쿠키(입장권) 가져오기
+    try:
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
@@ -91,11 +89,11 @@ def post_to_naver(data):
         try:
             driver.get(write_url)
         except UnexpectedAlertPresentException:
-            pass # 이동 순간 뜨는 팝업 무시
+            pass
 
-        time.sleep(5) # 에디터 로딩 대기
+        time.sleep(5)
 
-        # 4. 임시저장 등 불쑥 튀어나오는 팝업 확실하게 닫기
+        # 4. 임시저장 등 불쑥 튀어나오는 팝업 닫기
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -105,14 +103,12 @@ def post_to_naver(data):
 
         # 5. iframe 전환
         try:
-            WebDriverWait(driver, 5).until(
-                EC.frame_to_be_available_and_switch_to_it("mainFrame")
-            )
+            WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
             time.sleep(1)
         except:
             pass 
 
-        # [도움말 팝업 완벽 철거]
+        # 도움말 팝업 완벽 철거
         try:
             nuke_popup_js = """
             var overlays = document.querySelectorAll('[class*="help"], [class*="guide"], [class*="popup"], [class*="layer"], [class*="dimmed"]');
@@ -146,7 +142,6 @@ def post_to_naver(data):
             time.sleep(0.1)
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
-        # 💡 카테고리 설정은 '발행' 버튼을 눌러야 나오는 우측 패널에 있습니다!
         clicked_first = False
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         for btn in publish_btns:
@@ -156,24 +151,20 @@ def post_to_naver(data):
                 break
                 
         if not clicked_first:
-            # 버튼을 못 찾으면 스크린샷을 찍기 위해 강제로 에러를 발생시킵니다.
             raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
             
-        time.sleep(3) # 우측 설정 패널이 스르륵 열릴 때까지 대기
+        time.sleep(3) # 우측 설정 패널이 열릴 때까지 대기
 
-        # 9. 패널 열린 후 카테고리 선택 (선택 안 되어 있을 경우 대비)
+        # 9. 패널 열린 후 카테고리 선택
         try:
-            # 설정 패널 내의 카테고리 선택 버튼 찾기
             category_btn = driver.find_element(By.XPATH, "//button[contains(@class, 'se-category-button') or contains(@class, 'btn_select')]")
             ActionChains(driver).move_to_element(category_btn).click().perform()
             time.sleep(1)
             
-            # 열린 목록 중 가장 첫 번째 카테고리 클릭
             first_cat = driver.find_element(By.XPATH, "//ul[contains(@class, 'list_category') or contains(@class, 'se-category-list')]//li[1]")
             ActionChains(driver).move_to_element(first_cat).click().perform()
             time.sleep(1)
         except:
-            # 만약 이미 기본 카테고리가 셋팅되어 있어서 버튼이 다르다면 조용히 패스합니다.
             pass
 
         # 10. 최종 '발행' 버튼 클릭 (우측 패널 하단)
@@ -188,7 +179,15 @@ def post_to_naver(data):
         if not clicked_final:
             raise Exception("우측 패널 하단의 최종 '발행' 버튼을 찾을 수 없습니다.")
             
-        time.sleep(7) # 서버에 완전히 저장되고 페이지가 넘어갈 때까지 넉넉히 대기
+        time.sleep(7) # 서버 통신을 위해 넉넉히 대기
+        
+    except Exception as e:
+        driver.save_screenshot("error_screen.png")
+        raise e
+        
+    finally:
+        driver.quit()
+
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
@@ -221,7 +220,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
     except Exception as e:
         st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
         
-        # 에러 스크린샷 띄우기
+        # 에러 스크린샷 띄우기 (문제가 생기면 여기서 멈추고 사진을 보여줍니다)
         if os.path.exists("error_screen.png"):
             st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
             
