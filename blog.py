@@ -119,25 +119,29 @@ def post_to_naver(data):
         except:
             pass
 
-        # 6. 제목 입력
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        driver.execute_script("arguments[0].click();", title_box) 
-        time.sleep(0.5)
+       # 6. 제목 입력
+        title_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, "se-title-text"))
+        )
+        # 자바스크립트 가짜 클릭이 아닌, 진짜 마우스를 이동시켜 클릭(커서 깜빡임 활성화)
+        ActionChains(driver).move_to_element(title_box).click().perform()
+        time.sleep(1) # 커서가 생길 때까지 잠깐 대기
+        
+        # 제목 타이핑
         ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
         # 7. 본문 입력
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        driver.execute_script("arguments[0].click();", content_box) 
-        time.sleep(0.5)
+        # 진짜 마우스로 본문 영역 클릭
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(1)
         
+        # 본문 타이핑 (한 줄씩 치고 엔터)
         for line in data['body'].split('\n'):
             ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.1)
-
-        # 📸 [CCTV 1] 본문 작성 완료 사진
-        driver.save_screenshot("step1_written.png")
-
+            time.sleep(0.05)
+            
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
         clicked_first = False
