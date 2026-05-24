@@ -147,41 +147,44 @@ def post_to_naver(data):
             actions.send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
-        # 8. 1차 발행 버튼 클릭 (우측 상단)
-        # 이름표가 아니라 화면에서 '발행'이라는 글자가 적힌 버튼을 무조건 찾아서 누릅니다.
+ # 8. 발행 버튼 누르기 전, 카테고리 자동 선택 (필수!)
+        try:
+            # 카테고리 선택 버튼(보통은 '카테고리'라고 써 있음)을 클릭하여 목록을 펼칩니다.
+            category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button")
+            category_btn.click()
+            time.sleep(1)
+            
+            # 목록 중 첫 번째 카테고리를 클릭합니다.
+            first_category = driver.find_element(By.CSS_SELECTOR, "ul.se-category-list > li:first-child")
+            first_category.click()
+            time.sleep(1)
+        except:
+            # 이미 카테고리가 선택되어 있으면 그냥 넘어갑니다.
+            pass
+
+        # 9. 이제 발행 버튼 클릭 로직 수행 (기존 코드)
         publish_js_1 = """
         var btns = document.querySelectorAll('button, a');
         for(var i=0; i<btns.length; i++) {
             if(btns[i].innerText && btns[i].innerText.includes('발행')) {
-                btns[i].click();
-                break;
+                btns[i].click(); break;
             }
         }
         """
         driver.execute_script(publish_js_1)
-        time.sleep(2) # 설정 패널이 부드럽게 내려올 때까지 대기
+        time.sleep(2)
 
-        # 9. 2차 최종 발행 버튼 클릭 (설정 패널 하단)
+        # 10. 최종 발행 버튼 클릭
         publish_js_2 = """
         var btns = document.querySelectorAll('button');
-        // 패널이 열린 후 맨 마지막에 있는 '발행' 버튼을 찾아 누릅니다.
         for(var i=btns.length-1; i>=0; i--) {
             if(btns[i].innerText && btns[i].innerText.includes('발행')) {
-                btns[i].click();
-                break;
+                btns[i].click(); break;
             }
         }
         """
         driver.execute_script(publish_js_2)
-        time.sleep(5) # 블로그에 최종적으로 글이 올라갈 때까지 넉넉히 대기
-            
-    except Exception as e:
-        # 에러 발생 시 막힌 화면 캡처
-        driver.save_screenshot("error_screen.png")
-        raise e
-        
-    finally:
-        driver.quit()
+        time.sleep(5)
 
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
