@@ -7,6 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -63,31 +64,28 @@ def post_to_naver(data):
         naver_pw = st.secrets["NAVER_PW"].strip()
 
         # 로그인 페이지 접속
+# 1. 로그인 페이지 접속
         driver.get("https://nid.naver.com/nidlogin.login")
         time.sleep(2)
 
- # 1. 아이디/비밀번호 입력란 찾기 대기
-        WebDriverWait(driver, 10).until(
+        # 2. 아이디/비번 입력칸 찾기
+        id_input = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, "id"))
         )
+        pw_input = driver.find_element(By.ID, "pw")
 
-        # 2. 강력한 로그인 우회 (값 입력 + 키보드 입력 신호 강제 발생)
-        js_login = f"""
-            var id_input = document.getElementById('id');
-            var pw_input = document.getElementById('pw');
-            
-            // 아이디 넣고 신호 발생
-            id_input.value = '{naver_id}';
-            id_input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            id_input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            
-            // 비밀번호 넣고 신호 발생
-            pw_input.value = '{naver_pw}';
-            pw_input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            pw_input.dispatchEvent(new Event('change', {{ bubbles: true }}));
-        """
-        driver.execute_script(js_login)
-        time.sleep(1) # 입력이 인식될 때까지 아주 잠깐 대기
+        # 3. 사람처럼 직접 칸을 클릭하고 타이핑하기 (ActionChains)
+        actions = ActionChains(driver)
+        actions.click(id_input).pause(0.5).send_keys(naver_id).perform()
+        time.sleep(0.5)
+        
+        actions = ActionChains(driver)
+        actions.click(pw_input).pause(0.5).send_keys(naver_pw).perform()
+        time.sleep(0.5)
+
+        # 4. 로그인 버튼 클릭
+        driver.find_element(By.ID, "log.login").click()
+        time.sleep(4)
 
         # 3. 로그인 버튼 클릭
         driver.find_element(By.ID, "log.login").click()
