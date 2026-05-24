@@ -102,16 +102,20 @@ def post_to_naver(data):
         except NoAlertPresentException:
             pass
 
-# 5. iframe 전환 (이건 무조건 성공해야 에디터로 들어갑니다)
-        WebDriverWait(driver, 15).until(
-            EC.frame_to_be_available_and_switch_to_it("mainFrame")
-        )
-        time.sleep(2) # 프레임 안쪽이 다 로딩될 때까지 대기
+# 5. iframe 전환 (없을 수도 있으니 5초만 찾아보고 없으면 쿨하게 넘어갑니다!)
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.frame_to_be_available_and_switch_to_it("mainFrame")
+            )
+            time.sleep(1)
+        except:
+            # 타임아웃 에러가 나면? 에디터가 이미 열린 상태이므로 에러를 무시하고 진행합니다.
+            pass 
 
-        # 🚨 [도움말 팝업 완벽 철거]
+        # 🚨 [도움말 팝업 완벽 철거] 화면을 가리는 모든 귀찮은 창들을 날려버립니다.
         try:
             nuke_popup_js = """
-            var overlays = document.querySelectorAll('div[class*="help"], div[class*="guide"], div[class*="popup"], div[class*="layer"]');
+            var overlays = document.querySelectorAll('[class*="help"], [class*="guide"], [class*="popup"], [class*="layer"], [class*="dimmed"]');
             overlays.forEach(function(el) { el.style.display = 'none'; });
             """
             driver.execute_script(nuke_popup_js)
@@ -119,21 +123,22 @@ def post_to_naver(data):
         except:
             pass
 
-        # 6. 제목 입력 (가장 안정적이고 짧은 이름표 사용)
+        # 6. 제목 입력
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        title_box.click() # 제목 칸 클릭
+        # 마우스 오작동을 막기 위해 자바스크립트로 강제 클릭
+        driver.execute_script("arguments[0].click();", title_box) 
         time.sleep(0.5)
         
-        # 키보드를 직접 타이핑하는 방식으로 입력
+        # 키보드를 직접 두드리는 것과 똑같은 효과 (ActionChains)
         actions = ActionChains(driver)
         actions.send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 7. 본문 입력 (가장 안정적인 이름표 사용)
+        # 7. 본문 입력
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        content_box.click() # 본문 칸 클릭
+        driver.execute_script("arguments[0].click();", content_box) # 본문 강제 클릭
         time.sleep(0.5)
         
         for line in data['body'].split('\n'):
@@ -142,10 +147,9 @@ def post_to_naver(data):
             actions.send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
-        # 🚨 발행 버튼 클릭 (테스트가 완전히 성공하면 아래 두 줄의 주석(#)을 지우세요!)
-        # publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
-        # publish_btn.click()
-        # time.sleep(3)
+        # 🚨 자동 발행 (테스트 성공 시 아래 두 줄의 주석(#)을 지우세요)
+        publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
+        publish_btn.click()
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
