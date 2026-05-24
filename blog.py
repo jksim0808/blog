@@ -101,45 +101,47 @@ def post_to_naver(data):
         except NoAlertPresentException:
             pass
 
-        # 5. iframe 전환 (글쓰기 에디터 창 진입)
+# 5. iframe 전환 (글쓰기 에디터 창 진입)
         try:
             driver.switch_to.frame("mainFrame")
         except UnexpectedAlertPresentException:
-            # 진입 시점에 늦게 뜨는 팝업 2차 방어
             alert = driver.switch_to.alert
             alert.accept()
             time.sleep(1)
             driver.switch_to.frame("mainFrame")
-            
-# 🚨 [도움말 팝업 끄기] 에디터 진입 후 튜토리얼 창이 화면을 가리면 끕니다.
-        time.sleep(2)
+        
+        time.sleep(3) # 에디터 내부가 다 그려질 때까지 넉넉히 대기
+
+        # 🚨 [도움말 팝업 완벽 철거] 자바스크립트로 화면을 가리는 요소들을 통째로 지워버립니다.
         try:
-            # 1. 키보드의 ESC 키를 눌러서 창 닫기 시도
-            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+            nuke_popup_js = """
+            // '도움말', '팝업', '가이드'와 관련된 모든 창을 찾아서 숨겨버림
+            var overlays = document.querySelectorAll('div[class*="help"], div[class*="guide"], div[class*="popup"], div[class*="layer"]');
+            overlays.forEach(function(el) { el.style.display = 'none'; });
+            
+            // 닫기(X) 버튼이 보이면 모조리 눌러버림
+            var closeBtns = document.querySelectorAll('button[class*="close"], button[class*="Close"], a[class*="close"]');
+            closeBtns.forEach(function(btn) { btn.click(); });
+            """
+            driver.execute_script(nuke_popup_js)
             time.sleep(1)
         except:
             pass
 
-        try:
-            # 2. 우측 상단의 'X' 버튼이나 닫기 버튼을 직접 찾아서 클릭 시도
-            close_btns = driver.find_elements(By.CSS_SELECTOR, "button[class*='close'], button[class*='Close']")
-            if close_btns:
-                close_btns[0].click()
-                time.sleep(1)
-        except:
-            pass
-
-        
         # 6. 제목 입력
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".se-ff-nanumgothic.se-fs32.se-ff-system"))
         )
+        # 마우스로 클릭하는 대신, 오버레이를 무시하는 'JS 강제 클릭' 사용
+        driver.execute_script("arguments[0].click();", title_box) 
+        time.sleep(0.5)
         title_box.send_keys(data['title'])
         time.sleep(1)
 
         # 7. 본문 입력
         content_box = driver.find_element(By.CSS_SELECTOR, ".se-component-content")
-        content_box.click()
+        driver.execute_script("arguments[0].click();", content_box) # 본문도 강제 클릭
+        time.sleep(0.5)
         
         for line in data['body'].split('\n'):
             content_box.send_keys(line)
