@@ -7,12 +7,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
 import time
 import json
 import traceback
 import os
-from selenium.webdriver.common.action_chains import ActionChains
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
@@ -20,209 +20,86 @@ from selenium.webdriver.common.action_chains import ActionChains
 def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
     genai.configure(api_key=api_key)
-    
-    # 최신 제미나이 2.5 플래시 모델 적용
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-    prompt = f"""
-    '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
-    반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
-    {{
-        "title": "블로그 글 제목",
-        "body": "블로그 본문 내용 (HTML 태그 없이 줄바꿈은 \\n 으로 처리)",
-        "tags": "#태그1 #태그2 #태그3"
-    }}
-    """
-    
+    prompt = f"'{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘. JSON 형식으로 제목, 본문(줄바꿈\\n), 태그만 작성해."
     response = model.generate_content(prompt)
     
     try:
         content = json.loads(response.text)
         return content
-    except json.JSONDecodeError:
+    except:
         clean_text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(clean_text)
 
 # ---------------------------------------------------------
-# 2. 네이버 블로그 자동 발행 함수 (Selenium)
+# 2. 네이버 블로그 자동 발행 함수
 # ---------------------------------------------------------
 def post_to_naver(data):
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
-    
-    # 봇 탐지 우회(Stealth) 옵션
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    
-    # Streamlit 클라우드 크롬 경로 설정
     chrome_options.binary_location = "/usr/bin/chromium"
     service = Service("/usr/bin/chromedriver")
     
     driver = webdriver.Chrome(service=service, options=chrome_options)
     
     try:
-        # Secrets에서 쿠키(입장권) 가져오기
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 네이버 메인 접속 후 쿠키 심기
+        # 로그인 입장권 심기
         driver.get("https://www.naver.com")
-        time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
         driver.add_cookie({"name": "NID_SES", "value": nid_ses, "domain": ".naver.com"})
         driver.refresh()
-        time.sleep(2)
-
-        # 2. 내 블로그 전용 우회 주소로 이동하여 진짜 주소 알아내기
+        
+        # 글쓰기 페이지 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
-        my_actual_blog_url = driver.current_url 
-        if my_actual_blog_url.endswith("/"):
-            my_actual_blog_url = my_actual_blog_url[:-1]
-
-        # 3. 글쓰기 전용 주소로 직행
-        write_url = f"{my_actual_blog_url}/postwrite"
-        try:
-            driver.get(write_url)
-        except UnexpectedAlertPresentException:
-            pass # 이동 순간 뜨는 팝업 무시
-
-        time.sleep(5) # 에디터 로딩 대기
-
-        # 4. 임시저장 등 불쑥 튀어나오는 팝업 확실하게 닫기
-        try:
-            alert = driver.switch_to.alert
-            alert.accept()
-            time.sleep(1)
-        except NoAlertPresentException:
-            pass
-
-# 5. iframe 전환 (없을 수도 있으니 5초만 찾아보고 없으면 쿨하게 넘어갑니다!)
-        try:
-            WebDriverWait(driver, 5).until(
-                EC.frame_to_be_available_and_switch_to_it("mainFrame")
-            )
-            time.sleep(1)
-        except:
-            # 타임아웃 에러가 나면? 에디터가 이미 열린 상태이므로 에러를 무시하고 진행합니다.
-            pass 
-
-        # 🚨 [도움말 팝업 완벽 철거] 화면을 가리는 모든 귀찮은 창들을 날려버립니다.
-        try:
-            nuke_popup_js = """
-            var overlays = document.querySelectorAll('[class*="help"], [class*="guide"], [class*="popup"], [class*="layer"], [class*="dimmed"]');
-            overlays.forEach(function(el) { el.style.display = 'none'; });
-            """
-            driver.execute_script(nuke_popup_js)
-            time.sleep(1)
-        except:
-            pass
-
-        # 6. 제목 입력
-        title_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
-        )
-        # 마우스 오작동을 막기 위해 자바스크립트로 강제 클릭
-        driver.execute_script("arguments[0].click();", title_box) 
-        time.sleep(0.5)
-        
-        # 키보드를 직접 두드리는 것과 똑같은 효과 (ActionChains)
-        actions = ActionChains(driver)
-        actions.send_keys(data['title']).perform()
-        time.sleep(1)
-
-        # 7. 본문 입력
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        driver.execute_script("arguments[0].click();", content_box) # 본문 강제 클릭
-        time.sleep(0.5)
-        
-        for line in data['body'].split('\n'):
-            actions = ActionChains(driver)
-            actions.send_keys(line).perform()
-            actions.send_keys(Keys.ENTER).perform()
-            time.sleep(0.1)
-
- # 8. 발행 버튼 누르기 전, 카테고리 자동 선택 (필수!)
-        try:
-            # 카테고리 선택 버튼(보통은 '카테고리'라고 써 있음)을 클릭하여 목록을 펼칩니다.
-            category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button")
-            category_btn.click()
-            time.sleep(1)
-            
-            # 목록 중 첫 번째 카테고리를 클릭합니다.
-            first_category = driver.find_element(By.CSS_SELECTOR, "ul.se-category-list > li:first-child")
-            first_category.click()
-            time.sleep(1)
-        except:
-            # 이미 카테고리가 선택되어 있으면 그냥 넘어갑니다.
-            pass
-
-        # 9. 이제 발행 버튼 클릭 로직 수행 (기존 코드)
-        publish_js_1 = """
-        var btns = document.querySelectorAll('button, a');
-        for(var i=0; i<btns.length; i++) {
-            if(btns[i].innerText && btns[i].innerText.includes('발행')) {
-                btns[i].click(); break;
-            }
-        }
-        """
-        driver.execute_script(publish_js_1)
-        time.sleep(2)
-
-        # 10. 최종 발행 버튼 클릭
-        publish_js_2 = """
-        var btns = document.querySelectorAll('button');
-        for(var i=btns.length-1; i>=0; i--) {
-            if(btns[i].innerText && btns[i].innerText.includes('발행')) {
-                btns[i].click(); break;
-            }
-        }
-        """
-        driver.execute_script(publish_js_2)
+        driver.get(f"{driver.current_url}/postwrite")
         time.sleep(5)
 
+        # 에디터 진입
+        try:
+            WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
+        except:
+            pass
+
+        # 제목 입력
+        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+        driver.execute_script("arguments[0].click();", title_box)
+        ActionChains(driver).send_keys(data['title']).perform()
+        
+        # 본문 입력
+        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        driver.execute_script("arguments[0].click();", content_box)
+        for line in data['body'].split('\n'):
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+        
+        # 발행 버튼 클릭
+        time.sleep(2)
+        driver.execute_script("document.querySelectorAll('button, a').forEach(el => { if(el.innerText.includes('발행')) el.click(); });")
+        time.sleep(3)
+        driver.execute_script("document.querySelectorAll('button').forEach(el => { if(el.innerText.includes('발행')) el.click(); });")
+        time.sleep(5)
+            
+    finally:
+        driver.quit()
+
 # ---------------------------------------------------------
-# 3. Streamlit 웹 UI
+# 3. Streamlit 웹 UI (함수들 아래에 위치)
 # ---------------------------------------------------------
 st.set_page_config(page_title="블로그 자동 포스팅", page_icon="📝")
-
 st.title("📝 네이버 블로그 자동 포스팅 봇")
-st.markdown("주제를 입력하면 제미나이가 글을 쓰고 네이버 블로그에 자동으로 올립니다.")
+topic = st.text_input("어떤 주제로 글을 쓸까요?")
 
-topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 이동식 동물미용차 장점")
-
-if st.button("글 생성 및 발행 시작", type="primary"):
-    if not topic:
-        st.warning("주제를 입력해주세요!")
-        st.stop()
-
-    start_time = time.time()
-    
-    try:
-        with st.spinner("1/2단계: 제미나이가 글을 작성하고 있습니다..."):
+if st.button("글 생성 및 발행 시작"):
+    with st.spinner("작업 중..."):
+        try:
             post_data = get_blog_content(topic)
-            gen_time = time.time() - start_time
-            
-            st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
-
-        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
-            step2_start = time.time()
             post_to_naver(post_data)
-            post_time = time.time() - step2_start
-            
-            st.success(f"🎉 블로그 발행 작업 완료! ({post_time:.1f}초 소요)")
-
-    except Exception as e:
-        st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
-        
-        # 에러 스크린샷 띄우기
-        if os.path.exists("error_screen.png"):
-            st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
-            
-        with st.expander("상세 에러 로그 보기 (디버깅용)"):
-            st.code(traceback.format_exc())
+            st.success("🎉 성공!")
+        except Exception as e:
+            st.error(f"오류: {e}")
