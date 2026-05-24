@@ -150,6 +150,7 @@ def post_to_naver(data):
         # 🚨 자동 발행 (테스트 성공 시 아래 두 줄의 주석(#)을 지우세요)
         publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
         publish_btn.click()
+        time.sleep(3)
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
