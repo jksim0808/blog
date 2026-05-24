@@ -12,6 +12,8 @@ import time
 import json
 import traceback
 import os # 스크린샷 저장을 위한 모듈 추가
+from selenium.common.exceptions 
+import UnexpectedAlertPresentException, NoAlertPresentException
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
@@ -116,12 +118,31 @@ def post_to_naver(data):
 
         # 글쓰기 페이지 이동
         write_url = f"https://blog.naver.com/{naver_id}/postwrite"
-        driver.get(write_url)
-        time.sleep(5)
+        
+        # 4. 아이디/비번 치는 과정 없이 곧바로 블로그 글쓰기 페이지로 직행!
+        write_url = f"https://blog.naver.com/{naver_id}/postwrite"
+        
+        try:
+            driver.get(write_url)
+        except UnexpectedAlertPresentException:
+            pass # 이동하는 순간 팝업이 터져도 무시함
+            
+        time.sleep(3)
+
+        # 🚨 [핵심] 불쑥 튀어나온 팝업(Alert) 창이 있다면 '확인' 누르고 닫아버리기
+        try:
+            alert = driver.switch_to.alert
+            alert.accept() # "확인" 버튼 클릭
+            time.sleep(2)
+        except NoAlertPresentException:
+            pass # 팝업이 없으면 자연스럽게 통과
+
+        time.sleep(3) # 에디터 로딩 대기
 
         # iframe 전환 (mainFrame을 찾는 부분)
         driver.switch_to.frame("mainFrame")
         
+      
         # 제목 입력
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".se-ff-nanumgothic.se-fs32.se-ff-system"))
