@@ -14,6 +14,11 @@ import json
 import traceback
 import os
 
+# 이전 테스트에서 남은 사진들 삭제 (깨끗한 테스트를 위해)
+for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
+    if os.path.exists(file):
+        os.remove(file)
+
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
 # ---------------------------------------------------------
@@ -39,7 +44,8 @@ def get_blog_content(topic):
         content = json.loads(response.text)
         return content
     except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        clean_text = response.text.replace("```json", "").replace("
+```", "").strip()
         return json.loads(clean_text)
 
 # ---------------------------------------------------------
@@ -68,7 +74,7 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 네이버 메인 접속 후 쿠키 심기
+        # 1. 쿠키 심기
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -76,14 +82,14 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
-        # 2. 내 블로그 전용 우회 주소로 이동하여 진짜 주소 알아내기
+        # 2. 내 블로그 전용 우회 주소로 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # 3. 글쓰기 전용 주소로 직행
+        # 3. 글쓰기 전용 주소 직행
         write_url = f"{my_actual_blog_url}/postwrite"
         try:
             driver.get(write_url)
@@ -92,7 +98,7 @@ def post_to_naver(data):
 
         time.sleep(5)
 
-        # 4. 임시저장 등 불쑥 튀어나오는 팝업 닫기
+        # 4. 팝업 닫기
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -107,26 +113,18 @@ def post_to_naver(data):
         except:
             pass 
 
-        # 도움말 팝업 완벽 철거
+        # 도움말 팝업 제거
         try:
-            nuke_popup_js = """
-            var overlays = document.querySelectorAll('[class*="help"], [class*="guide"], [class*="popup"], [class*="layer"], [class*="dimmed"]');
-            overlays.forEach(function(el) { el.style.display = 'none'; });
-            """
-            driver.execute_script(nuke_popup_js)
+            driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
             time.sleep(1)
         except:
             pass
 
         # 6. 제목 입력
-        title_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
-        )
+        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
         driver.execute_script("arguments[0].click();", title_box) 
         time.sleep(0.5)
-        
-        actions = ActionChains(driver)
-        actions.send_keys(data['title']).perform()
+        ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
         # 7. 본문 입력
@@ -135,50 +133,47 @@ def post_to_naver(data):
         time.sleep(0.5)
         
         for line in data['body'].split('\n'):
-            actions = ActionChains(driver)
-            actions.send_keys(line).perform()
-            actions.send_keys(Keys.ENTER).perform()
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
+        # 📸 [CCTV 1] 본문 작성 완료 사진
+        driver.save_screenshot("step1_written.png")
+
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
+        # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
         clicked_first = False
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         for btn in publish_btns:
             if btn.is_displayed() and btn.text.strip() == "발행":
-                ActionChains(driver).move_to_element(btn).click().perform()
+                driver.execute_script("arguments[0].click();", btn)
                 clicked_first = True
                 break
                 
         if not clicked_first:
             raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
             
-        time.sleep(3) # 우측 설정 패널이 열릴 때까지 대기
+        time.sleep(3) # 패널 열릴 때까지 대기
 
-        # 9. 패널 열린 후 카테고리 선택
-        try:
-            category_btn = driver.find_element(By.XPATH, "//button[contains(@class, 'se-category-button') or contains(@class, 'btn_select')]")
-            ActionChains(driver).move_to_element(category_btn).click().perform()
-            time.sleep(1)
-            
-            first_cat = driver.find_element(By.XPATH, "//ul[contains(@class, 'list_category') or contains(@class, 'se-category-list')]//li[1]")
-            ActionChains(driver).move_to_element(first_cat).click().perform()
-            time.sleep(1)
-        except:
-            pass
+        # 📸 [CCTV 2] 발행 패널 열린 상태 사진
+        driver.save_screenshot("step2_panel.png")
 
-        # 10. 최종 '발행' 버튼 클릭 (우측 패널 하단)
+        # 9. 최종 '발행' 버튼 클릭 (우측 패널 하단)
         clicked_final = False
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         for btn in reversed(final_btns):
             if btn.is_displayed() and btn.text.strip() == "발행":
-                ActionChains(driver).move_to_element(btn).click().perform()
+                driver.execute_script("arguments[0].click();", btn)
                 clicked_final = True
                 break
                 
         if not clicked_final:
-            raise Exception("우측 패널 하단의 최종 '발행' 버튼을 찾을 수 없습니다.")
+            raise Exception("최종 '발행' 버튼을 찾을 수 없습니다.")
             
-        time.sleep(7) # 서버 통신을 위해 넉넉히 대기
+        time.sleep(5) 
+        
+        # 📸 [CCTV 3] 최종 발행 처리 직후 사진
+        driver.save_screenshot("step3_done.png")
+        time.sleep(2) # 서버 통신 마무리 대기
         
     except Exception as e:
         driver.save_screenshot("error_screen.png")
@@ -193,7 +188,6 @@ def post_to_naver(data):
 st.set_page_config(page_title="블로그 자동 포스팅", page_icon="📝")
 
 st.title("📝 네이버 블로그 자동 포스팅 봇")
-st.markdown("주제를 입력하면 제미나이가 글을 쓰고 네이버 블로그에 자동으로 올립니다.")
 
 topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 이동식 동물미용차 장점")
 
@@ -216,10 +210,19 @@ if st.button("글 생성 및 발행 시작", type="primary"):
             post_time = time.time() - step2_start
             st.success(f"🎉 블로그 발행 작업 완료! ({post_time:.1f}초 소요)")
 
+        # 작업 완료 후 과정 사진 보여주기
+        st.write("### 📸 봇이 작업한 화면 로그 (CCTV)")
+        cols = st.columns(3)
+        if os.path.exists("step1_written.png"):
+            cols[0].image("step1_written.png", caption="1. 글 작성 완료")
+        if os.path.exists("step2_panel.png"):
+            cols[1].image("step2_panel.png", caption="2. 발행 패널 오픈")
+        if os.path.exists("step3_done.png"):
+            cols[2].image("step3_done.png", caption="3. 최종 전송 화면")
+
     except Exception as e:
         st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
         
-        # 에러 스크린샷 띄우기 (문제가 생기면 여기서 멈추고 사진을 보여줍니다)
         if os.path.exists("error_screen.png"):
             st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
             
