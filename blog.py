@@ -157,38 +157,39 @@ def post_to_naver(data):
         except:
             pass
 
-        # 9. 이제 발행 버튼 클릭 로직 수행
-        publish_js_1 = """
-        var btns = document.querySelectorAll('button, a');
-        for(var i=0; i<btns.length; i++) {
-            if(btns[i].innerText && btns[i].innerText.includes('발행')) {
-                btns[i].click(); break;
-            }
-        }
-        """
-        driver.execute_script(publish_js_1)
-        time.sleep(2)
+       # 9. 첫 번째 '발행' 버튼 클릭 (우측 상단 툴바)
+        try:
+            # 텍스트가 정확히 '발행'인 버튼들만 추려냅니다 ('예약발행' 등 오작동 방지)
+            publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
+            
+            for btn in publish_btns:
+                if btn.is_displayed() and btn.text.strip() == "발행":
+                    # 마우스를 직접 요소로 이동시켜서 클릭하는 효과
+                    ActionChains(driver).move_to_element(btn).click().perform()
+                    break
+            
+            # 우측 패널(카테고리/태그 설정창)이 스르륵 열릴 때까지 충분히 대기
+            time.sleep(3) 
+            
+        except Exception as e:
+            print("우측 상단 발행 버튼 클릭 실패:", e)
 
-        # 10. 최종 발행 버튼 클릭
-        publish_js_2 = """
-        var btns = document.querySelectorAll('button');
-        for(var i=btns.length-1; i>=0; i--) {
-            if(btns[i].innerText && btns[i].innerText.includes('발행')) {
-                btns[i].click(); break;
-            }
-        }
-        """
-        driver.execute_script(publish_js_2)
-        time.sleep(7) # 서버 통신을 위해 넉넉히 대기
-        
-    except Exception as e:
-        # 에러 발생 시 막힌 화면 캡처
-        driver.save_screenshot("error_screen.png")
-        raise e
-        
-    finally:
-        driver.quit()
-
+        # 10. 최종 '발행' 버튼 클릭 (우측 패널 하단)
+        try:
+            # 패널이 열린 후 화면에 존재하는 '발행' 버튼을 다시 찾습니다.
+            final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
+            
+            # 리스트를 뒤에서부터 탐색 (패널 하단의 최종 발행 버튼은 DOM 구조상 제일 마지막에 위치할 확률이 높음)
+            for btn in reversed(final_btns):
+                if btn.is_displayed() and btn.text.strip() == "발행":
+                    ActionChains(driver).move_to_element(btn).click().perform()
+                    break
+                    
+            # 네이버 서버로 데이터가 완전히 전송되고 페이지가 넘어갈 때까지 넉넉하게 대기 (매우 중요)
+            time.sleep(7) 
+            
+        except Exception as e:
+            print("최종 발행 버튼 클릭 실패:", e)
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
