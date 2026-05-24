@@ -37,8 +37,7 @@ def get_blog_content(topic):
         content = json.loads(response.text)
         return content
     except json.JSONDecodeError:
-        # 가끔 Gemini가 마크다운 코드블럭(```json ... 
-```)을 포함해서 줄 때가 있음
+        # 가끔 Gemini가 마크다운 코드블럭(```json ... ```)을 포함해서 줄 때가 있음
         clean_text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(clean_text)
 
