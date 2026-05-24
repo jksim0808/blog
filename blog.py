@@ -12,6 +12,7 @@ import time
 import json
 import traceback
 import os
+from selenium.webdriver.common.action_chains import ActionChains
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
