@@ -147,10 +147,33 @@ def post_to_naver(data):
             actions.send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
-        # 🚨 자동 발행 (테스트 성공 시 아래 두 줄의 주석(#)을 지우세요)
-        publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
-        publish_btn.click()
-        time.sleep(3)
+        # 8. 1차 발행 버튼 클릭 (우측 상단)
+        # 이름표가 아니라 화면에서 '발행'이라는 글자가 적힌 버튼을 무조건 찾아서 누릅니다.
+        publish_js_1 = """
+        var btns = document.querySelectorAll('button, a');
+        for(var i=0; i<btns.length; i++) {
+            if(btns[i].innerText && btns[i].innerText.includes('발행')) {
+                btns[i].click();
+                break;
+            }
+        }
+        """
+        driver.execute_script(publish_js_1)
+        time.sleep(2) # 설정 패널이 부드럽게 내려올 때까지 대기
+
+        # 9. 2차 최종 발행 버튼 클릭 (설정 패널 하단)
+        publish_js_2 = """
+        var btns = document.querySelectorAll('button');
+        // 패널이 열린 후 맨 마지막에 있는 '발행' 버튼을 찾아 누릅니다.
+        for(var i=btns.length-1; i>=0; i--) {
+            if(btns[i].innerText && btns[i].innerText.includes('발행')) {
+                btns[i].click();
+                break;
+            }
+        }
+        """
+        driver.execute_script(publish_js_2)
+        time.sleep(5) # 블로그에 최종적으로 글이 올라갈 때까지 넉넉히 대기
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
