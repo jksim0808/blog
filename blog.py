@@ -102,73 +102,50 @@ def post_to_naver(data):
         except NoAlertPresentException:
             pass
 
-# 5. iframe 전환 (글쓰기 에디터 창 진입)
-        try:
-            # 혹시 모를 팝업이 뒤늦게 떴다면 닫기
-            WebDriverWait(driver, 3).until(EC.alert_is_present())
-            driver.switch_to.alert.accept()
-        except:
-            pass
+# 5. iframe 전환 (이건 무조건 성공해야 에디터로 들어갑니다)
+        WebDriverWait(driver, 15).until(
+            EC.frame_to_be_available_and_switch_to_it("mainFrame")
+        )
+        time.sleep(2) # 프레임 안쪽이 다 로딩될 때까지 대기
 
-        try:
-            # mainFrame이 그려질 때까지 최대 15초간 여유롭게 기다렸다가 진입합니다.
-            WebDriverWait(driver, 15).until(
-                EC.frame_to_be_available_and_switch_to_it("mainFrame")
-            )
-        except:
-            # 15초를 기다려도 없다면? 
-            # 네이버가 프레임 없이 에디터를 통째로 띄워준 상태이므로 당황하지 않고 그냥 넘어갑니다.
-            pass
-
-        # 🚨 [도움말 팝업 완벽 철거] 자바스크립트로 화면을 가리는 요소들을 통째로 지워버립니다.
+        # 🚨 [도움말 팝업 완벽 철거]
         try:
             nuke_popup_js = """
-            // '도움말', '팝업', '가이드'와 관련된 모든 창을 찾아서 숨겨버림
             var overlays = document.querySelectorAll('div[class*="help"], div[class*="guide"], div[class*="popup"], div[class*="layer"]');
             overlays.forEach(function(el) { el.style.display = 'none'; });
-            
-            // 닫기(X) 버튼이 보이면 모조리 눌러버림
-            var closeBtns = document.querySelectorAll('button[class*="close"], button[class*="Close"], a[class*="close"]');
-            closeBtns.forEach(function(btn) { btn.click(); });
             """
             driver.execute_script(nuke_popup_js)
             time.sleep(1)
         except:
             pass
 
-        # 6. 제목 입력
+        # 6. 제목 입력 (가장 안정적이고 짧은 이름표 사용)
         title_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-ff-nanumgothic.se-fs32.se-ff-system"))
+            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        # 마우스로 클릭하는 대신, 오버레이를 무시하는 'JS 강제 클릭' 사용
-        driver.execute_script("arguments[0].click();", title_box) 
+        title_box.click() # 제목 칸 클릭
         time.sleep(0.5)
-        title_box.send_keys(data['title'])
+        
+        # 키보드를 직접 타이핑하는 방식으로 입력
+        actions = ActionChains(driver)
+        actions.send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 7. 본문 입력
-        content_box = driver.find_element(By.CSS_SELECTOR, ".se-component-content")
-        driver.execute_script("arguments[0].click();", content_box) # 본문도 강제 클릭
+        # 7. 본문 입력 (가장 안정적인 이름표 사용)
+        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        content_box.click() # 본문 칸 클릭
         time.sleep(0.5)
         
         for line in data['body'].split('\n'):
-            content_box.send_keys(line)
-            content_box.send_keys(Keys.ENTER)
+            actions = ActionChains(driver)
+            actions.send_keys(line).perform()
+            actions.send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
-        # 🚨 발행 버튼 클릭 로직 (테스트가 완전히 성공하면 아래 두 줄의 주석(#)을 지우세요!)
+        # 🚨 발행 버튼 클릭 (테스트가 완전히 성공하면 아래 두 줄의 주석(#)을 지우세요!)
         # publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
         # publish_btn.click()
         # time.sleep(3)
-            
-    except Exception as e:
-        # 에러 발생 시 막힌 화면 캡처
-        driver.save_screenshot("error_screen.png")
-        raise e
-        
-    finally:
-        driver.quit()
-
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
