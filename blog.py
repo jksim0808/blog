@@ -103,6 +103,24 @@ def post_to_naver(data):
     finally:
         driver.quit()
 
+except Exception as e:
+        # 에러가 발생하면 그 순간의 브라우저 화면을 사진으로 저장합니다.
+        driver.save_screenshot("error_screen.png")
+        raise e  # 에러를 밖으로 던져서 UI에서 처리하게 함
+        
+    finally:
+        driver.quit()
+
+except Exception as e:
+        st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
+        
+        # 에러 화면 캡처 파일이 있으면 화면에 보여줍니다.
+        import os
+        if os.path.exists("error_screen.png"):
+            st.image("error_screen.png", caption="에러 발생 당시 브라우저 실제 화면 📸")
+            
+        with st.expander("상세 에러 로그 보기 (디버깅용)"):
+            st.code(traceback.format_exc())
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
