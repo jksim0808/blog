@@ -40,7 +40,8 @@ def get_blog_content(topic):
         content = json.loads(response.text)
         return content
     except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        clean_text = response.text.replace("```json", "").replace("
+```", "").strip()
         return json.loads(clean_text)
 
 # ---------------------------------------------------------
@@ -52,6 +53,7 @@ def post_to_naver(data):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080") # 화면 잘림 방지
     
     # 봇 탐지 우회(Stealth) 옵션
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -102,17 +104,16 @@ def post_to_naver(data):
         except NoAlertPresentException:
             pass
 
-# 5. iframe 전환 (없을 수도 있으니 5초만 찾아보고 없으면 쿨하게 넘어갑니다!)
+        # 5. iframe 전환
         try:
             WebDriverWait(driver, 5).until(
                 EC.frame_to_be_available_and_switch_to_it("mainFrame")
             )
             time.sleep(1)
         except:
-            # 타임아웃 에러가 나면? 에디터가 이미 열린 상태이므로 에러를 무시하고 진행합니다.
             pass 
 
-        # 🚨 [도움말 팝업 완벽 철거] 화면을 가리는 모든 귀찮은 창들을 날려버립니다.
+        # [도움말 팝업 완벽 철거]
         try:
             nuke_popup_js = """
             var overlays = document.querySelectorAll('[class*="help"], [class*="guide"], [class*="popup"], [class*="layer"], [class*="dimmed"]');
@@ -127,18 +128,16 @@ def post_to_naver(data):
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        # 마우스 오작동을 막기 위해 자바스크립트로 강제 클릭
         driver.execute_script("arguments[0].click();", title_box) 
         time.sleep(0.5)
         
-        # 키보드를 직접 두드리는 것과 똑같은 효과 (ActionChains)
         actions = ActionChains(driver)
         actions.send_keys(data['title']).perform()
         time.sleep(1)
 
         # 7. 본문 입력
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        driver.execute_script("arguments[0].click();", content_box) # 본문 강제 클릭
+        driver.execute_script("arguments[0].click();", content_box) 
         time.sleep(0.5)
         
         for line in data['body'].split('\n'):
@@ -147,22 +146,19 @@ def post_to_naver(data):
             actions.send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
-       # 8. 발행 버튼 누르기 전, 카테고리 자동 선택 (필수!)
+        # 8. 발행 버튼 누르기 전, 카테고리 자동 선택
         try:
-            # 카테고리 선택 버튼(보통은 '카테고리'라고 써 있음)을 클릭하여 목록을 펼칩니다.
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button")
             category_btn.click()
             time.sleep(1)
             
-            # 목록 중 첫 번째 카테고리를 클릭합니다.
             first_category = driver.find_element(By.CSS_SELECTOR, "ul.se-category-list > li:first-child")
             first_category.click()
             time.sleep(1)
         except:
-            # 이미 카테고리가 선택되어 있으면 그냥 넘어갑니다.
             pass
 
-        # 9. 이제 발행 버튼 클릭 로직 수행 (기존 코드)
+        # 9. 이제 발행 버튼 클릭 로직 수행
         publish_js_1 = """
         var btns = document.querySelectorAll('button, a');
         for(var i=0; i<btns.length; i++) {
@@ -184,61 +180,8 @@ def post_to_naver(data):
         }
         """
         driver.execute_script(publish_js_2)
-        time.sleep(5)
-# ---------------------------------------------------------
-# 3. Streamlit 웹 UI
-# ---------------------------------------------------------
-st.set_page_config(page_title="블로그 자동 포스팅", page_icon="📝")
-
-st.title("📝 네이버 블로그 자동 포스팅 봇")
-st.markdown("주제를 입력하면 제미나이가 글을 쓰고 네이버 블로그에 자동으로 올립니다.")
-
-topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 이동식 동물미용차 장점")
-
-if st.button("글 생성 및 발행 시작", type="primary"):
-    if not topic:
-        st.warning("주제를 입력해주세요!")
-        st.stop()
-
-    start_time = time.time()
-    
-    try:
-        with st.spinner("1/2단계: 제미나이가 글을 작성하고 있습니다..."):
-            post_data = get_blog_content(topic)
-            gen_time = time.time() - start_time
-            
-            st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
-
-        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
-            step2_start = time.time()
-            post_to_naver(post_data)
-            post_time = time.time() - step2_start
-            
-            st.success(f"🎉 블로그 발행 작업 완료! ({post_time:.1f}초 소요)")
-
-    except Exception as e:
-        st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
+        time.sleep(7) # 서버 통신을 위해 넉넉히 대기
         
-        # 에러 스크린샷 띄우기
-        if os.path.exists("error_screen.png"):
-            st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
-            
-        with st.expander("상세 에러 로그 보기 (디버깅용)"):
-            st.code(traceback.format_exc())
-        # 7. 본문 입력
-        content_box = driver.find_element(By.CSS_SELECTOR, ".se-component-content")
-        content_box.click()
-        
-        for line in data['body'].split('\n'):
-            content_box.send_keys(line)
-            content_box.send_keys(Keys.ENTER)
-            time.sleep(0.1)
-
-        # 🚨 발행 버튼 클릭 로직 (테스트가 완전히 성공하면 아래 두 줄의 주석(#)을 지우세요!)
-        # publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
-        # publish_btn.click()
-        # time.sleep(3)
-            
     except Exception as e:
         # 에러 발생 시 막힌 화면 캡처
         driver.save_screenshot("error_screen.png")
@@ -268,14 +211,12 @@ if st.button("글 생성 및 발행 시작", type="primary"):
         with st.spinner("1/2단계: 제미나이가 글을 작성하고 있습니다..."):
             post_data = get_blog_content(topic)
             gen_time = time.time() - start_time
-            
             st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
 
         with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
             step2_start = time.time()
             post_to_naver(post_data)
             post_time = time.time() - step2_start
-            
             st.success(f"🎉 블로그 발행 작업 완료! ({post_time:.1f}초 소요)")
 
     except Exception as e:
