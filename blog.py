@@ -119,16 +119,16 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (상단 툴바 가림 현상 완벽 해결)
-        title_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text"))
+# 6. 제목 입력 (가려짐 무시 + 텍스트 강제 주입)
+        title_box = WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 💡 핵심 1: 스크롤을 무조건 맨 위로 올려서 상단 메뉴바에 제목 칸이 가려지는 것을 막습니다.
+        # 무조건 맨 위로 스크롤하여 방해물 최소화
         driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(0.5)
+        time.sleep(1)
         
-        # 💡 핵심 2: 에러가 나지 않는 자바스크립트 클릭으로 껍데기를 뚫고 들어가 커서를 강제로 깜빡이게 만듭니다.
+        # 💡 핵심 1: ActionChains의 깐깐한 클릭 검사를 쓰지 않고, 자바스크립트로 강제 포커스를 줍니다.
         driver.execute_script("""
             var el = arguments[0].querySelector('p, span') || arguments[0];
             el.click();
@@ -136,18 +136,13 @@ def post_to_naver(data):
         """, title_box)
         time.sleep(1)
         
-        # 💡 핵심 3: 이중 안전장치 타이핑
-        try:
-            # 1차 시도: 요소에 직접 타이핑
-            ActionChains(driver).send_keys_to_element(title_box, data['title']).perform()
-        except:
-            # 2차 시도: 만약 가려졌다고 에러가 나면, JS로 포커스된 '허공(현재 커서 위치)'에 그냥 타이핑
-            ActionChains(driver).send_keys(data['title']).perform()
+        # 💡 핵심 2: CDP(God Mode)를 사용해 가려지든 말든 현재 커서에 글자를 바로 꽂아버립니다.
+        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
         time.sleep(1)
 
         # 7. 본문 입력
-        content_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-content"))
+        content_box = WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
         driver.execute_script("""
@@ -157,15 +152,14 @@ def post_to_naver(data):
         """, content_box)
         time.sleep(1)
         
+        # 본문은 한 줄씩 꽂아 넣고, 엔터키만 가볍게 쳐줍니다.
         for line in data['body'].split('\n'):
-            try:
-                ActionChains(driver).send_keys_to_element(content_box, line).send_keys(Keys.ENTER).perform()
-            except:
-                ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            driver.execute_cdp_cmd("Input.insertText", {"text": line})
+            ActionChains(driver).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진 (복구 완료!)
+        # 📸 [CCTV 1] 본문 작성 완료 사진 (이번엔 반드시 찍힙니다!)
         driver.save_screenshot("step1_written.png")
             
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
