@@ -119,34 +119,38 @@ def post_to_naver(data):
         except:
             pass
 
- # 6. 제목 입력 (화면에 보이는 '제목'이라는 회색 글자를 직접 타겟팅)
-        title_placeholder = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, "//*[contains(@class, 'se-title-text')]//span[contains(text(), '제목')]"))
+# 6. 제목 입력 (가장 안전한 셀렉터 + CDP 텍스트 직분사)
+        title_target = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text"))
         )
         
-        # 화면 중앙으로 끌어온 뒤, 정확히 글자 위를 마우스로 딸깍 누릅니다 (커서 생성)
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_placeholder)
+        # 화면 중앙으로 끌어오기 (가려져서 클릭 안 되는 현상 방지)
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_target)
         time.sleep(0.5)
-        ActionChains(driver).move_to_element(title_placeholder).click().perform()
+        
+        # 자바스크립트 강제 클릭 + ActionChains 클릭 (이중 안전장치로 커서 무조건 활성화)
+        driver.execute_script("arguments[0].click();", title_target)
+        ActionChains(driver).move_to_element(title_target).click().perform()
         time.sleep(1)
         
-        # 💡 핵심: 태그를 찾지 않고 "현재 브라우저에서 깜빡이고 있는 커서"를 찾아 바로 타이핑합니다.
-        driver.switch_to.active_element.send_keys(data['title'])
+        # 🔥 크롬 내부 프로토콜(CDP) 'God Mode': 클립보드나 키보드 없이 텍스트를 시스템 레벨에서 꽂아넣습니다.
+        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
         time.sleep(1)
 
-        # 7. 본문 입력 (화면에 보이는 '글감과 함께...' 회색 글자를 직접 타겟팅)
-        body_placeholder = driver.find_element(By.XPATH, "//*[contains(@class, 'se-content')]//span[contains(text(), '글감')]")
+        # 7. 본문 입력
+        content_target = driver.find_element(By.CSS_SELECTOR, ".se-content")
         
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", body_placeholder)
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_target)
         time.sleep(0.5)
-        ActionChains(driver).move_to_element(body_placeholder).click().perform()
+        
+        driver.execute_script("arguments[0].click();", content_target)
+        ActionChains(driver).move_to_element(content_target).click().perform()
         time.sleep(1)
         
-        # 본문 커서가 깜빡이는 곳을 찾아 한 줄씩 타자를 칩니다.
-        active_body = driver.switch_to.active_element
+        # 본문은 여러 줄이므로 한 줄씩 삽입하고 ActionChains로 엔터만 쳐줍니다.
         for line in data['body'].split('\n'):
-            active_body.send_keys(line)
-            active_body.send_keys(Keys.ENTER)
+            driver.execute_cdp_cmd("Input.insertText", {"text": line})
+            ActionChains(driver).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
