@@ -103,12 +103,21 @@ def post_to_naver(data):
 
 # 5. iframe 전환 (글쓰기 에디터 창 진입)
         try:
-            driver.switch_to.frame("mainFrame")
-        except UnexpectedAlertPresentException:
-            alert = driver.switch_to.alert
-            alert.accept()
-            time.sleep(1)
-            driver.switch_to.frame("mainFrame")
+            # 혹시 모를 팝업이 뒤늦게 떴다면 닫기
+            WebDriverWait(driver, 3).until(EC.alert_is_present())
+            driver.switch_to.alert.accept()
+        except:
+            pass
+
+        try:
+            # mainFrame이 그려질 때까지 최대 15초간 여유롭게 기다렸다가 진입합니다.
+            WebDriverWait(driver, 15).until(
+                EC.frame_to_be_available_and_switch_to_it("mainFrame")
+            )
+        except:
+            # 15초를 기다려도 없다면? 
+            # 네이버가 프레임 없이 에디터를 통째로 띄워준 상태이므로 당황하지 않고 그냥 넘어갑니다.
+            pass
         
         time.sleep(3) # 에디터 내부가 다 그려질 때까지 넉넉히 대기
 
