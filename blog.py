@@ -39,8 +39,7 @@ def get_blog_content(topic):
         content = json.loads(response.text)
         return content
     except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("
-```", "").strip()
+        clean_text = response.text.replace("```json", "").replace("```", "").strip()
         return json.loads(clean_text)
 
 # ---------------------------------------------------------
