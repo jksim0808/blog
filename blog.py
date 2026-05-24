@@ -101,109 +101,6 @@ def post_to_naver(data):
         except NoAlertPresentException:
             pass
 
-       import streamlit as st
-import google.generativeai as genai
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
-import time
-import json
-import traceback
-import os
-
-# ---------------------------------------------------------
-# 1. Gemini API 글 생성 함수
-# ---------------------------------------------------------
-def get_blog_content(topic):
-    api_key = st.secrets["GEMINI_API_KEY"].strip()
-    genai.configure(api_key=api_key)
-    
-    # 최신 제미나이 2.5 플래시 모델 적용
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    
-    prompt = f"""
-    '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
-    반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
-    {{
-        "title": "블로그 글 제목",
-        "body": "블로그 본문 내용 (HTML 태그 없이 줄바꿈은 \\n 으로 처리)",
-        "tags": "#태그1 #태그2 #태그3"
-    }}
-    """
-    
-    response = model.generate_content(prompt)
-    
-    try:
-        content = json.loads(response.text)
-        return content
-    except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_text)
-
-# ---------------------------------------------------------
-# 2. 네이버 블로그 자동 발행 함수 (Selenium)
-# ---------------------------------------------------------
-def post_to_naver(data):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    
-    # 봇 탐지 우회(Stealth) 옵션
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    
-    # Streamlit 클라우드 크롬 경로 설정
-    chrome_options.binary_location = "/usr/bin/chromium"
-    service = Service("/usr/bin/chromedriver")
-    
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    
-    try:
-        # Secrets에서 쿠키(입장권) 가져오기
-        nid_aut = st.secrets["NAVER_NID_AUT"].strip()
-        nid_ses = st.secrets["NAVER_NID_SES"].strip()
-
-        # 1. 네이버 메인 접속 후 쿠키 심기
-        driver.get("https://www.naver.com")
-        time.sleep(2)
-        driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
-        driver.add_cookie({"name": "NID_SES", "value": nid_ses, "domain": ".naver.com"})
-        driver.refresh()
-        time.sleep(2)
-
-        # 2. 내 블로그 전용 우회 주소로 이동하여 진짜 주소 알아내기
-        driver.get("https://blog.naver.com/MyBlog.naver")
-        time.sleep(3)
-        my_actual_blog_url = driver.current_url 
-        if my_actual_blog_url.endswith("/"):
-            my_actual_blog_url = my_actual_blog_url[:-1]
-
-        # 3. 글쓰기 전용 주소로 직행
-        write_url = f"{my_actual_blog_url}/postwrite"
-        try:
-            driver.get(write_url)
-        except UnexpectedAlertPresentException:
-            pass # 이동 순간 뜨는 팝업 무시
-
-        time.sleep(5) # 에디터 로딩 대기
-
-        # 4. 임시저장 등 불쑥 튀어나오는 팝업 확실하게 닫기
-        try:
-            alert = driver.switch_to.alert
-            alert.accept()
-            time.sleep(1)
-        except NoAlertPresentException:
-            pass
-
         # 5. iframe 전환 (글쓰기 에디터 창 진입)
         try:
             driver.switch_to.frame("mainFrame")
@@ -213,7 +110,23 @@ def post_to_naver(data):
             alert.accept()
             time.sleep(1)
             driver.switch_to.frame("mainFrame")
-        
+        # 🚨 [도움말 팝업 끄기] 에디터 진입 후 튜토리얼 창이 화면을 가리면 끕니다.
+        time.sleep(2)
+        try:
+            # 1. 키보드의 ESC 키를 눌러서 창 닫기 시도
+            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+            time.sleep(1)
+        except:
+            pass
+
+        try:
+            # 2. 우측 상단의 'X' 버튼이나 닫기 버튼을 직접 찾아서 클릭 시도
+            close_btns = driver.find_elements(By.CSS_SELECTOR, "button[class*='close'], button[class*='Close']")
+            if close_btns:
+                close_btns[0].click()
+                time.sleep(1)
+        except:
+            pass
         # 6. 제목 입력
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".se-ff-nanumgothic.se-fs32.se-ff-system"))
