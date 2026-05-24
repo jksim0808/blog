@@ -119,30 +119,37 @@ def post_to_naver(data):
         except:
             pass
 
-     # 6. 제목 입력 (자바스크립트 insertText 방식)
-        title_box = WebDriverWait(driver, 10).until(
+    # 6. 제목 입력 (껍데기 내부의 실제 입력창 찾기)
+        title_container = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
+        # 껍데기(div) 내부의 실제 편집 가능한(contenteditable) 요소를 콕 집어 찾습니다.
+        title_input = title_container.find_element(By.CSS_SELECTOR, "[contenteditable='true']")
         
-        # 에디터 클릭 및 강제 포커스 (커서 깜빡임 활성화)
-        driver.execute_script("arguments[0].click();", title_box)
-        driver.execute_script("arguments[0].focus();", title_box)
+        # 화면에 잘 보이도록 끌어올린 뒤 네이티브 클릭 (커서 활성화)
+        driver.execute_script("arguments[0].scrollIntoView(true);", title_input)
+        time.sleep(0.5)
+        title_input.click() 
         time.sleep(0.5)
         
-        # OS 클립보드를 거치지 않고, 브라우저 내부 기능으로 '붙여넣기' 효과를 냅니다.
-        driver.execute_script("document.execCommand('insertText', false, arguments[0]);", data['title'])
+        # 현재 깜빡이는 커서 위치에 바로 키보드 타이핑을 시작합니다.
+        ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 7. 본문 입력 (자바스크립트 insertText 방식)
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        # 7. 본문 입력 (껍데기 내부의 실제 입력창 찾기)
+        content_container = driver.find_element(By.CLASS_NAME, "se-content")
+        content_input = content_container.find_element(By.CSS_SELECTOR, "[contenteditable='true']")
         
-        driver.execute_script("arguments[0].click();", content_box)
-        driver.execute_script("arguments[0].focus();", content_box)
+        driver.execute_script("arguments[0].scrollIntoView(true);", content_input)
+        time.sleep(0.5)
+        content_input.click()
         time.sleep(0.5)
         
-        # 줄바꿈(\n)이 포함된 본문 전체를 한 번에 텍스트로 밀어 넣습니다.
-        driver.execute_script("document.execCommand('insertText', false, arguments[0]);", data['body'])
-        time.sleep(1)
+        # 본문을 한 줄씩 타이핑하며 엔터키를 칩니다 (사람이 치는 것과 100% 동일)
+        for line in data['body'].split('\n'):
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            time.sleep(0.05)
+            
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
         clicked_first = False
