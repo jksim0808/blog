@@ -13,6 +13,8 @@ import time
 import json
 import traceback
 import os
+import pyperclip
+
 
 # 이전 테스트에서 남은 사진들 삭제 (깨끗한 테스트를 위해)
 for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
@@ -119,29 +121,36 @@ def post_to_naver(data):
         except:
             pass
 
-       # 6. 제목 입력
+      # 6. 제목 입력 (클립보드 활용)
         title_box = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CLASS_NAME, "se-title-text"))
+            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        # 자바스크립트 가짜 클릭이 아닌, 진짜 마우스를 이동시켜 클릭(커서 깜빡임 활성화)
-        ActionChains(driver).move_to_element(title_box).click().perform()
-        time.sleep(1) # 커서가 생길 때까지 잠깐 대기
         
-        # 제목 타이핑
-        ActionChains(driver).send_keys(data['title']).perform()
+        # 1. 자바스크립트로 강제 포커스 주기
+        driver.execute_script("arguments[0].focus();", title_box)
+        time.sleep(0.5)
+        
+        # 2. 클립보드에 제목 복사
+        pyperclip.copy(data['title'])
+        
+        # 3. ActionChains로 클릭 후 Ctrl+V (맥OS라면 Command+V로 변경 필요)
+        # 윈도우/리눅스 환경 기준
+        ActionChains(driver).move_to_element(title_box).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
         time.sleep(1)
 
-        # 7. 본문 입력
+        # 7. 본문 입력 (클립보드 활용)
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        # 진짜 마우스로 본문 영역 클릭
-        ActionChains(driver).move_to_element(content_box).click().perform()
-        time.sleep(1)
         
-        # 본문 타이핑 (한 줄씩 치고 엔터)
-        for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
-            
+        # 1. 자바스크립트로 강제 포커스 주기
+        driver.execute_script("arguments[0].focus();", content_box)
+        time.sleep(0.5)
+        
+        # 2. 클립보드에 본문 전체 복사
+        pyperclip.copy(data['body'])
+        
+        # 3. ActionChains로 클릭 후 Ctrl+V
+        ActionChains(driver).move_to_element(content_box).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+        time.sleep(1)
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
         clicked_first = False
