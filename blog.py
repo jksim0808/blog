@@ -3,6 +3,9 @@ from generator import get_blog_content
 from blog_bot import post_to_naver
 import sys
 import os
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import pyperclip
 
 # 현재 파일이 있는 디렉토리를 경로에 추가
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
