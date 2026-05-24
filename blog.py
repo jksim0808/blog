@@ -148,9 +148,9 @@ def post_to_naver(data):
             time.sleep(0.1)
 
         # 🚨 발행 버튼 클릭 (테스트가 완전히 성공하면 아래 두 줄의 주석(#)을 지우세요!)
-        # publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
-        # publish_btn.click()
-        # time.sleep(3)
+         publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
+         publish_btn.click()
+         time.sleep(3)
             
     except Exception as e:
         # 에러 발생 시 막힌 화면 캡처
