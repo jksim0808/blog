@@ -1,6 +1,5 @@
 import streamlit as st
 from generator import get_blog_content
-from blog_bot import post_to_naver
 import sys
 import os
 from selenium import webdriver
