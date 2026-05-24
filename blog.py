@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.service import Service # 크롬 서비스 추가
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -10,16 +10,16 @@ from selenium.webdriver.common.keys import Keys
 import time
 import json
 import traceback
+import os # 스크린샷 저장을 위한 모듈 추가
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
 # ---------------------------------------------------------
 def get_blog_content(topic):
-    # Secrets에서 키를 가져오고 보이지 않는 공백/줄바꿈 제거
     api_key = st.secrets["GEMINI_API_KEY"].strip()
     genai.configure(api_key=api_key)
     
-    # [핵심 수정] 진단 결과에서 확인된 최신 모델 적용!
+    # 최신 모델 적용 완료
     model = genai.GenerativeModel('gemini-2.5-flash')
     
     prompt = f"""
@@ -38,7 +38,8 @@ def get_blog_content(topic):
         content = json.loads(response.text)
         return content
     except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
+        clean_text = response.text.replace("```json", "").replace("
+```", "").strip()
         return json.loads(clean_text)
 
 # ---------------------------------------------------------
@@ -51,12 +52,13 @@ def post_to_naver(data):
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    chrome_options.binary_location = "/usr/bin/chromium" # <-- 추가
-    driver = webdriver.Chrome(options=chrome_options)
-   
-    # 설치된 크롬 드라이버 경로 명시
-    service = Service("/usr/bin/chromedriver") # <-- 추가
-    driver = webdriver.Chrome(service=service, options=chrome_options) # <-- 수정
+    
+    # 클라우드 크롬 경로 설정
+    chrome_options.binary_location = "/usr/bin/chromium"
+    service = Service("/usr/bin/chromedriver")
+    
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    
     try:
         naver_id = st.secrets["NAVER_ID"].strip()
         naver_pw = st.secrets["NAVER_PW"].strip()
@@ -76,7 +78,7 @@ def post_to_naver(data):
         driver.get(write_url)
         time.sleep(5)
 
-        # iframe 전환
+        # iframe 전환 (mainFrame을 찾는 부분)
         driver.switch_to.frame("mainFrame")
         
         # 제목 입력
@@ -94,33 +96,15 @@ def post_to_naver(data):
             content_box.send_keys(line)
             content_box.send_keys(Keys.ENTER)
             time.sleep(0.1)
-
-        # 자동 발행 방지를 위해 저장만 하고 대기 (테스트용)
-        # 실제 발행을 원하시면 아래 두 줄의 주석(#)을 해제하세요.
-        # publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
-        # publish_btn.click()
-        
-    finally:
-        driver.quit()
-
-except Exception as e:
-        # 에러가 발생하면 그 순간의 브라우저 화면을 사진으로 저장합니다.
-        driver.save_screenshot("error_screen.png")
-        raise e  # 에러를 밖으로 던져서 UI에서 처리하게 함
-        
-    finally:
-        driver.quit()
-
-except Exception as e:
-        st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
-        
-        # 에러 화면 캡처 파일이 있으면 화면에 보여줍니다.
-        import os
-        if os.path.exists("error_screen.png"):
-            st.image("error_screen.png", caption="에러 발생 당시 브라우저 실제 화면 📸")
             
-        with st.expander("상세 에러 로그 보기 (디버깅용)"):
-            st.code(traceback.format_exc())
+    except Exception as e:
+        # 에러 발생 시 브라우저 화면 캡처
+        driver.save_screenshot("error_screen.png")
+        raise e  # 발생한 에러를 밖으로 던짐
+        
+    finally:
+        driver.quit()
+
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
@@ -139,15 +123,11 @@ if st.button("글 생성 및 발행 시작", type="primary"):
     start_time = time.time()
     
     try:
-        with st.spinner("1/2단계: 제미나이가 글을 작성하고 있습니다... (최신 모델 적용 중)"):
+        with st.spinner("1/2단계: 제미나이가 글을 작성하고 있습니다..."):
             post_data = get_blog_content(topic)
             gen_time = time.time() - start_time
             
             st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
-            with st.expander("생성된 내용 미리보기"):
-                st.write("**제목:**", post_data.get('title'))
-                st.write("**본문:**", post_data.get('body'))
-                st.write("**태그:**", post_data.get('tags'))
 
         with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
             step2_start = time.time()
@@ -158,5 +138,10 @@ if st.button("글 생성 및 발행 시작", type="primary"):
 
     except Exception as e:
         st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
+        
+        # 에러 스크린샷 파일이 존재하면 화면에 띄움
+        if os.path.exists("error_screen.png"):
+            st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
+            
         with st.expander("상세 에러 로그 보기 (디버깅용)"):
             st.code(traceback.format_exc())
