@@ -66,11 +66,32 @@ def post_to_naver(data):
         driver.get("https://nid.naver.com/nidlogin.login")
         time.sleep(2)
 
-        # 로그인 우회 입력
-        driver.execute_script(f"document.getElementsByName('id')[0].value='{naver_id}'")
-        driver.execute_script(f"document.getElementsByName('pw')[0].value='{naver_pw}'")
+ # 1. 아이디/비밀번호 입력란 찾기 대기
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "id"))
+        )
+
+        # 2. 강력한 로그인 우회 (값 입력 + 키보드 입력 신호 강제 발생)
+        js_login = f"""
+            var id_input = document.getElementById('id');
+            var pw_input = document.getElementById('pw');
+            
+            // 아이디 넣고 신호 발생
+            id_input.value = '{naver_id}';
+            id_input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            id_input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            
+            // 비밀번호 넣고 신호 발생
+            pw_input.value = '{naver_pw}';
+            pw_input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            pw_input.dispatchEvent(new Event('change', {{ bubbles: true }}));
+        """
+        driver.execute_script(js_login)
+        time.sleep(1) # 입력이 인식될 때까지 아주 잠깐 대기
+
+        # 3. 로그인 버튼 클릭
         driver.find_element(By.ID, "log.login").click()
-        time.sleep(3)
+        time.sleep(4) # 로그인 완료 대기
 
         # 글쓰기 페이지 이동
         write_url = f"https://blog.naver.com/{naver_id}/postwrite"
