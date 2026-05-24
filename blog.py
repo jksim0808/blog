@@ -153,12 +153,21 @@ def post_to_naver(data):
         time.sleep(1)
         # 📸 [CCTV 1] 본문 작성 완료 사진 (이번엔 반드시 글씨가 꽉 차 있습니다!)
         driver.save_screenshot("step1_written.png")
+       # 💡 [추가] 아까 숨겨뒀던 상단 메뉴바(발행 버튼 포함)를 다시 화면에 나타나게 복구합니다!
+        driver.execute_script("""
+            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+            for (var i = 0; i < blockers.length; i++) {
+                blockers[i].style.display = '';
+            }
+        """)
+        time.sleep(1)
+
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
-        # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
         clicked_first = False
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         for btn in publish_btns:
             if btn.is_displayed() and btn.text.strip() == "발행":
+                # 복구된 버튼을 가장 확실하게 누르는 JS 강제 클릭 사용
                 driver.execute_script("arguments[0].click();", btn)
                 clicked_first = True
                 break
@@ -166,11 +175,7 @@ def post_to_naver(data):
         if not clicked_first:
             raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
             
-        time.sleep(3) # 패널 열릴 때까지 대기
-
-        # 📸 [CCTV 2] 발행 패널 열린 상태 사진
-        driver.save_screenshot("step2_panel.png")
-
+        time.sleep(3) # 우측 설정 패널이 열릴 때까지 대기
         # 9. 최종 '발행' 버튼 클릭 (우측 패널 하단)
         clicked_final = False
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
