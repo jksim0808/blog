@@ -119,39 +119,42 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가장 안전한 셀렉터 + CDP 텍스트 직분사)
-        title_target = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text"))
+# 6. 제목 입력 (정석 마우스 클릭 + 직접 키보드 전송)
+        title_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-title-text"))
         )
-        
-        # 화면 중앙으로 끌어오기 (가려져서 클릭 안 되는 현상 방지)
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_target)
+        # 화면 중앙으로 끌어옵니다.
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
         time.sleep(0.5)
         
-        # 자바스크립트 강제 클릭 + ActionChains 클릭 (이중 안전장치로 커서 무조건 활성화)
-        driver.execute_script("arguments[0].click();", title_target)
-        ActionChains(driver).move_to_element(title_target).click().perform()
-        time.sleep(1)
+        # 💡 핵심: 자바스크립트가 아닌, 셀레니움의 '진짜' 마우스 클릭으로 커서를 활성화합니다.
+        title_box.click()
+        time.sleep(0.5)
         
-        # 🔥 크롬 내부 프로토콜(CDP) 'God Mode': 클립보드나 키보드 없이 텍스트를 시스템 레벨에서 꽂아넣습니다.
-        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
+        # 커서가 활성화된 해당 상자에 직접 키보드 입력을 꽂아 넣습니다.
+        title_box.send_keys(data['title'])
         time.sleep(1)
 
         # 7. 본문 입력
-        content_target = driver.find_element(By.CSS_SELECTOR, ".se-content")
-        
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_target)
+        content_box = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-content"))
+        )
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
         time.sleep(0.5)
         
-        driver.execute_script("arguments[0].click();", content_target)
-        ActionChains(driver).move_to_element(content_target).click().perform()
-        time.sleep(1)
+        # 진짜 마우스 클릭으로 본문 커서 활성화
+        content_box.click()
+        time.sleep(0.5)
         
-        # 본문은 여러 줄이므로 한 줄씩 삽입하고 ActionChains로 엔터만 쳐줍니다.
+        # 엔터키를 포함하여 본문을 한 줄씩 타이핑합니다.
         for line in data['body'].split('\n'):
-            driver.execute_cdp_cmd("Input.insertText", {"text": line})
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
+            content_box.send_keys(line)
+            content_box.send_keys(Keys.ENTER)
             time.sleep(0.05)
+            
+        time.sleep(1)
+        # 📸 [CCTV 1] 본문 작성 완료 사진 (실수로 지웠던 카메라 복구 완료!)
+        driver.save_screenshot("step1_written.png")
             
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
