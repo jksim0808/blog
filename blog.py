@@ -119,49 +119,40 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가려짐 무시 + 텍스트 강제 주입)
-        title_box = WebDriverWait(driver, 15).until(
+# 6. 제목 입력 (가림막 철거 후 정석 타이핑)
+        title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 무조건 맨 위로 스크롤하여 방해물 최소화
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(1)
-        
-        # 💡 핵심 1: ActionChains의 깐깐한 클릭 검사를 쓰지 않고, 자바스크립트로 강제 포커스를 줍니다.
+        # 💡 핵심 1: 마우스 클릭을 방해하는 네이버의 상단 툴바, 메뉴바를 싹 다 찾아내서 화면에서 지워버립니다.
         driver.execute_script("""
-            var el = arguments[0].querySelector('p, span') || arguments[0];
-            el.click();
-            el.focus();
-        """, title_box)
+            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+            for (var i = 0; i < blockers.length; i++) {
+                blockers[i].style.display = 'none';
+            }
+            window.scrollTo(0, 0);
+        """)
         time.sleep(1)
         
-        # 💡 핵심 2: CDP(God Mode)를 사용해 가려지든 말든 현재 커서에 글자를 바로 꽂아버립니다.
-        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
+        # 💡 핵심 2: 방해물이 없어졌으니, 당당하게 진짜 마우스로 제목 칸을 클릭하고 즉시 타자를 칩니다!
+        ActionChains(driver).move_to_element(title_box).click().send_keys(data['title']).perform()
         time.sleep(1)
 
         # 7. 본문 입력
-        content_box = WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
-        )
+        content_box = driver.find_element(By.CLASS_NAME, "se-content")
         
-        driver.execute_script("""
-            var el = arguments[0].querySelector('p, span') || arguments[0];
-            el.click();
-            el.focus();
-        """, content_box)
-        time.sleep(1)
+        # 본문 칸 마우스 클릭 (커서 활성화)
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(0.5)
         
-        # 본문은 한 줄씩 꽂아 넣고, 엔터키만 가볍게 쳐줍니다.
+        # 한 줄씩 엔터키를 치며 사람과 100% 똑같은 방식으로 입력합니다.
         for line in data['body'].split('\n'):
-            driver.execute_cdp_cmd("Input.insertText", {"text": line})
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진 (이번엔 반드시 찍힙니다!)
+        # 📸 [CCTV 1] 본문 작성 완료 사진 (이번엔 반드시 글씨가 꽉 차 있습니다!)
         driver.save_screenshot("step1_written.png")
-            
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
         clicked_first = False
