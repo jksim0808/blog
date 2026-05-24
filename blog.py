@@ -61,7 +61,30 @@ def post_to_naver(data):
     
     try:
         naver_id = st.secrets["NAVER_ID"].strip()
-        naver_pw = st.secrets["NAVER_PW"].strip()
+        nid_aut = st.secrets["NAVER_NID_AUT"].strip()
+        nid_ses = st.secrets["NAVER_NID_SES"].strip()
+
+        # 1. 네이버 메인 홈페이지에 먼저 접속 (쿠키를 심으려면 해당 사이트에 먼저 가야 함)
+        driver.get("https://www.naver.com")
+        time.sleep(2)
+
+        # 2. 내 컴퓨터에서 훔쳐온(?) 로그인 입장권을 브라우저에 심기
+        driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
+        driver.add_cookie({"name": "NID_SES", "value": nid_ses, "domain": ".naver.com"})
+
+        # 3. 새로고침 (입장권을 심고 새로고침하면 마법처럼 로그인된 상태로 변함!)
+        driver.refresh()
+        time.sleep(2)
+
+        # 4. 아이디/비번 치는 과정 없이 곧바로 블로그 글쓰기 페이지로 직행!
+        write_url = f"https://blog.naver.com/{naver_id}/postwrite"
+        driver.get(write_url)
+        time.sleep(5)
+
+        # iframe 전환 (mainFrame을 찾는 부분)
+        driver.switch_to.frame("mainFrame")
+        
+        # ... (이 아래로는 기존 제목/본문 입력 코드 동일) ...
 
         # 로그인 페이지 접속
 # 1. 로그인 페이지 접속
