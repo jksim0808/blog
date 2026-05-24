@@ -119,26 +119,34 @@ def post_to_naver(data):
         except:
             pass
 
-  # 6. 제목 입력 (p 태그 직접 타겟팅)
-        title_p = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-title-text p"))
+ # 6. 제목 입력 (화면에 보이는 '제목'이라는 회색 글자를 직접 타겟팅)
+        title_placeholder = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//*[contains(@class, 'se-title-text')]//span[contains(text(), '제목')]"))
         )
-        # 껍데기가 아닌 진짜 글씨가 써지는 문단(p) 영역을 정확히 클릭합니다.
-        title_p.click() 
-        time.sleep(1) # 커서가 활성화될 때까지 잠깐 대기
         
-        ActionChains(driver).send_keys(data['title']).perform()
+        # 화면 중앙으로 끌어온 뒤, 정확히 글자 위를 마우스로 딸깍 누릅니다 (커서 생성)
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_placeholder)
+        time.sleep(0.5)
+        ActionChains(driver).move_to_element(title_placeholder).click().perform()
+        time.sleep(1)
+        
+        # 💡 핵심: 태그를 찾지 않고 "현재 브라우저에서 깜빡이고 있는 커서"를 찾아 바로 타이핑합니다.
+        driver.switch_to.active_element.send_keys(data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력 (p 태그 직접 타겟팅)
-        content_p = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-content p"))
-        )
-        content_p.click()
+        # 7. 본문 입력 (화면에 보이는 '글감과 함께...' 회색 글자를 직접 타겟팅)
+        body_placeholder = driver.find_element(By.XPATH, "//*[contains(@class, 'se-content')]//span[contains(text(), '글감')]")
+        
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", body_placeholder)
+        time.sleep(0.5)
+        ActionChains(driver).move_to_element(body_placeholder).click().perform()
         time.sleep(1)
         
+        # 본문 커서가 깜빡이는 곳을 찾아 한 줄씩 타자를 칩니다.
+        active_body = driver.switch_to.active_element
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            active_body.send_keys(line)
+            active_body.send_keys(Keys.ENTER)
             time.sleep(0.05)
             
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
