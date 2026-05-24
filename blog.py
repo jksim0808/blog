@@ -119,41 +119,53 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (정석 마우스 클릭 + 직접 키보드 전송)
+# 6. 제목 입력 (상단 툴바 가림 현상 완벽 해결)
         title_box = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-title-text"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text"))
         )
-        # 화면 중앙으로 끌어옵니다.
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
+        
+        # 💡 핵심 1: 스크롤을 무조건 맨 위로 올려서 상단 메뉴바에 제목 칸이 가려지는 것을 막습니다.
+        driver.execute_script("window.scrollTo(0, 0);")
         time.sleep(0.5)
         
-        # 💡 핵심: 자바스크립트가 아닌, 셀레니움의 '진짜' 마우스 클릭으로 커서를 활성화합니다.
-        title_box.click()
-        time.sleep(0.5)
+        # 💡 핵심 2: 에러가 나지 않는 자바스크립트 클릭으로 껍데기를 뚫고 들어가 커서를 강제로 깜빡이게 만듭니다.
+        driver.execute_script("""
+            var el = arguments[0].querySelector('p, span') || arguments[0];
+            el.click();
+            el.focus();
+        """, title_box)
+        time.sleep(1)
         
-        # 커서가 활성화된 해당 상자에 직접 키보드 입력을 꽂아 넣습니다.
-        title_box.send_keys(data['title'])
+        # 💡 핵심 3: 이중 안전장치 타이핑
+        try:
+            # 1차 시도: 요소에 직접 타이핑
+            ActionChains(driver).send_keys_to_element(title_box, data['title']).perform()
+        except:
+            # 2차 시도: 만약 가려졌다고 에러가 나면, JS로 포커스된 '허공(현재 커서 위치)'에 그냥 타이핑
+            ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
         # 7. 본문 입력
         content_box = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-content"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-content"))
         )
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
-        time.sleep(0.5)
         
-        # 진짜 마우스 클릭으로 본문 커서 활성화
-        content_box.click()
-        time.sleep(0.5)
+        driver.execute_script("""
+            var el = arguments[0].querySelector('p, span') || arguments[0];
+            el.click();
+            el.focus();
+        """, content_box)
+        time.sleep(1)
         
-        # 엔터키를 포함하여 본문을 한 줄씩 타이핑합니다.
         for line in data['body'].split('\n'):
-            content_box.send_keys(line)
-            content_box.send_keys(Keys.ENTER)
+            try:
+                ActionChains(driver).send_keys_to_element(content_box, line).send_keys(Keys.ENTER).perform()
+            except:
+                ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진 (실수로 지웠던 카메라 복구 완료!)
+        # 📸 [CCTV 1] 본문 작성 완료 사진 (복구 완료!)
         driver.save_screenshot("step1_written.png")
             
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
