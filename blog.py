@@ -111,6 +111,37 @@ def post_to_naver(data):
         driver.find_element(By.ID, "log.login").click()
         time.sleep(4) # 로그인 완료 대기
 
+        # 4. 가장 안전하고 확실한 글쓰기 전용 우회 주소로 이동
+        write_url = f"https://blog.naver.com/{naver_id}?Redirect=Write"
+        
+        try:
+            driver.get(write_url)
+        except UnexpectedAlertPresentException:
+            # 주소 이동 중 팝업이 터지면 무시함
+            pass
+            
+        # 🚨 [강력한 팝업 격추] 이동 직후 팝업이 뜨는지 감시하고 무조건 닫습니다.
+        try:
+            WebDriverWait(driver, 3).until(EC.alert_is_present())
+            alert = driver.switch_to.alert
+            alert.accept() # "확인" 버튼 강제 클릭
+        except:
+            pass # 팝업이 안 뜨면 무사 통과
+
+        time.sleep(5) # 스마트에디터가 완전히 켜질 때까지 충분히 대기
+
+        # 5. iframe 전환 (글쓰기 에디터 창으로 진입)
+        try:
+            driver.switch_to.frame("mainFrame")
+        except UnexpectedAlertPresentException:
+            # 진입 순간 늦게 뜨는 팝업도 한 번 더 방어
+            alert = driver.switch_to.alert
+            alert.accept()
+            driver.switch_to.frame("mainFrame")
+            
+        # ... (이 아래는 기존 제목/본문 입력 코드와 동일) ...
+
+        
         # 4. 글쓰기 페이지로 직행 (주소 형식을 가장 확실한 방식으로 변경)
         write_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={naver_id}"
         driver.get(write_url)
