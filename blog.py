@@ -2,17 +2,16 @@ import streamlit as st
 import google.generativeai as genai
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service # 크롬 서비스 추가
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
 import time
 import json
 import traceback
-import os # 스크린샷 저장을 위한 모듈 추가
-from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+import os
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
@@ -21,7 +20,7 @@ def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
     genai.configure(api_key=api_key)
     
-    # 최신 모델 적용 완료
+    # 최신 제미나이 2.5 플래시 모델 적용
     model = genai.GenerativeModel('gemini-2.5-flash')
     
     prompt = f"""
@@ -52,151 +51,74 @@ def post_to_naver(data):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    # 클라우드 크롬 경로 설정
+    # 봇 탐지 우회(Stealth) 옵션
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    
+    # Streamlit 클라우드 크롬 경로 설정
     chrome_options.binary_location = "/usr/bin/chromium"
     service = Service("/usr/bin/chromedriver")
     
     driver = webdriver.Chrome(service=service, options=chrome_options)
     
     try:
-        naver_id = st.secrets["NAVER_ID"].strip()
+        # Secrets에서 쿠키(입장권) 가져오기
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 네이버 메인 홈페이지에 먼저 접속 (쿠키를 심으려면 해당 사이트에 먼저 가야 함)
+        # 1. 네이버 메인 접속 후 쿠키 심기
         driver.get("https://www.naver.com")
         time.sleep(2)
-
-        # 2. 내 컴퓨터에서 훔쳐온(?) 로그인 입장권을 브라우저에 심기
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
         driver.add_cookie({"name": "NID_SES", "value": nid_ses, "domain": ".naver.com"})
-
-        # 3. 새로고침 (입장권을 심고 새로고침하면 마법처럼 로그인된 상태로 변함!)
         driver.refresh()
         time.sleep(2)
 
-        # 4. 아이디/비번 치는 과정 없이 곧바로 블로그 글쓰기 페이지로 직행!
-        write_url = f"https://blog.naver.com/{naver_id}/postwrite"
-        driver.get(write_url)
-        time.sleep(5)
+        # 2. 내 블로그 전용 우회 주소로 이동하여 진짜 주소 알아내기
+        driver.get("https://blog.naver.com/MyBlog.naver")
+        time.sleep(3)
+        my_actual_blog_url = driver.current_url 
+        if my_actual_blog_url.endswith("/"):
+            my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # iframe 전환 (mainFrame을 찾는 부분)
-        driver.switch_to.frame("mainFrame")
-        
-        # ... (이 아래로는 기존 제목/본문 입력 코드 동일) ...
-
- 
-# 1. 로그인 페이지 접속
-        driver.get("https://nid.naver.com/nidlogin.login")
-        time.sleep(2)
-
-        # 2. 아이디/비번 입력칸 찾기
-        id_input = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "id"))
-        )
-        pw_input = driver.find_element(By.ID, "pw")
-
-        # 3. 사람처럼 직접 칸을 클릭하고 타이핑하기 (ActionChains)
-        actions = ActionChains(driver)
-        actions.click(id_input).pause(0.5).send_keys(naver_id).perform()
-        time.sleep(0.5)
-        
-        actions = ActionChains(driver)
-        actions.click(pw_input).pause(0.5).send_keys(naver_pw).perform()
-        time.sleep(0.5)
-
-        # 3. 로그인 버튼 클릭
-        driver.find_element(By.ID, "log.login").click()
-        time.sleep(4) # 로그인 완료 대기
-
-        # 4. 가장 안전하고 확실한 글쓰기 전용 우회 주소로 이동
-        write_url = f"https://blog.naver.com/{naver_id}?Redirect=Write"
-        
+        # 3. 글쓰기 전용 주소로 직행
+        write_url = f"{my_actual_blog_url}/postwrite"
         try:
             driver.get(write_url)
         except UnexpectedAlertPresentException:
-            # 주소 이동 중 팝업이 터지면 무시함
-            pass
-            
-        # 🚨 [강력한 팝업 격추] 이동 직후 팝업이 뜨는지 감시하고 무조건 닫습니다.
-        try:
-            WebDriverWait(driver, 3).until(EC.alert_is_present())
-            alert = driver.switch_to.alert
-            alert.accept() # "확인" 버튼 강제 클릭
-        except:
-            pass # 팝업이 안 뜨면 무사 통과
+            pass # 이동 순간 뜨는 팝업 무시
 
-        time.sleep(5) # 스마트에디터가 완전히 켜질 때까지 충분히 대기
+        time.sleep(5) # 에디터 로딩 대기
 
-        # 5. iframe 전환 (글쓰기 에디터 창으로 진입)
+        # 4. 임시저장 등 불쑥 튀어나오는 팝업 확실하게 닫기
         try:
-            driver.switch_to.frame("mainFrame")
-        except UnexpectedAlertPresentException:
-            # 진입 순간 늦게 뜨는 팝업도 한 번 더 방어
             alert = driver.switch_to.alert
             alert.accept()
-            driver.switch_to.frame("mainFrame")
-            
-        # ... (이 아래는 기존 제목/본문 입력 코드와 동일) ...
-
-        
-        # 4. 글쓰기 페이지로 직행 (주소 형식을 가장 확실한 방식으로 변경)
-        write_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={naver_id}"
-        driver.get(write_url)
-        
-        # 🚨 [강력한 팝업 격추] 페이지 이동 후 최대 3초간 잠복하며 팝업이 뜨는지 감시합니다.
-        try:
-            # 팝업이 나타날 때까지 대기
-            WebDriverWait(driver, 3).until(EC.alert_is_present())
-            alert = driver.switch_to.alert
-            print(f"팝업 무시됨: {alert.text}") # 내부 로그용
-            alert.accept() # "확인"을 눌러서 팝업 닫기
             time.sleep(1)
-        except:
-            pass # 3초 동안 아무 팝업도 안 뜨면 무사통과
-
-        time.sleep(5) # 스마트에디터가 완전히 켜질 때까지 대기
-
-        # 5. iframe 전환 (mainFrame 찾기)
-        driver.switch_to.frame("mainFrame")
-        
-        # 글쓰기 페이지 이동
-        write_url = f"https://blog.naver.com/{naver_id}/postwrite"
-        
-        # 4. 아이디/비번 치는 과정 없이 곧바로 블로그 글쓰기 페이지로 직행!
-        write_url = f"https://blog.naver.com/{naver_id}/postwrite"
-        
-        try:
-            driver.get(write_url)
-        except UnexpectedAlertPresentException:
-            pass # 이동하는 순간 팝업이 터져도 무시함
-            
-        time.sleep(3)
-
-        # 🚨 [핵심] 불쑥 튀어나온 팝업(Alert) 창이 있다면 '확인' 누르고 닫아버리기
-        try:
-            alert = driver.switch_to.alert
-            alert.accept() # "확인" 버튼 클릭
-            time.sleep(2)
         except NoAlertPresentException:
-            pass # 팝업이 없으면 자연스럽게 통과
+            pass
 
-        time.sleep(3) # 에디터 로딩 대기
-
-        # iframe 전환 (mainFrame을 찾는 부분)
-        driver.switch_to.frame("mainFrame")
+        # 5. iframe 전환 (글쓰기 에디터 창 진입)
+        try:
+            driver.switch_to.frame("mainFrame")
+        except UnexpectedAlertPresentException:
+            # 진입 시점에 늦게 뜨는 팝업 2차 방어
+            alert = driver.switch_to.alert
+            alert.accept()
+            time.sleep(1)
+            driver.switch_to.frame("mainFrame")
         
-      
-        # 제목 입력
+        # 6. 제목 입력
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".se-ff-nanumgothic.se-fs32.se-ff-system"))
         )
         title_box.send_keys(data['title'])
         time.sleep(1)
 
-        # 본문 입력
+        # 7. 본문 입력
         content_box = driver.find_element(By.CSS_SELECTOR, ".se-component-content")
         content_box.click()
         
@@ -204,11 +126,16 @@ def post_to_naver(data):
             content_box.send_keys(line)
             content_box.send_keys(Keys.ENTER)
             time.sleep(0.1)
+
+        # 🚨 발행 버튼 클릭 로직 (테스트가 완전히 성공하면 아래 두 줄의 주석(#)을 지우세요!)
+        # publish_btn = driver.find_element(By.CSS_SELECTOR, ".btn_publish")
+        # publish_btn.click()
+        # time.sleep(3)
             
     except Exception as e:
-        # 에러 발생 시 브라우저 화면 캡처
+        # 에러 발생 시 막힌 화면 캡처
         driver.save_screenshot("error_screen.png")
-        raise e  # 발생한 에러를 밖으로 던짐
+        raise e
         
     finally:
         driver.quit()
@@ -221,7 +148,7 @@ st.set_page_config(page_title="블로그 자동 포스팅", page_icon="📝")
 st.title("📝 네이버 블로그 자동 포스팅 봇")
 st.markdown("주제를 입력하면 제미나이가 글을 쓰고 네이버 블로그에 자동으로 올립니다.")
 
-topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 2026년 인공지능 트렌드")
+topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 이동식 동물미용차 장점")
 
 if st.button("글 생성 및 발행 시작", type="primary"):
     if not topic:
@@ -247,7 +174,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
     except Exception as e:
         st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
         
-        # 에러 스크린샷 파일이 존재하면 화면에 띄움
+        # 에러 스크린샷 띄우기
         if os.path.exists("error_screen.png"):
             st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
             
