@@ -8,6 +8,15 @@ import pyperclip
 import streamlit as st
 import time
 import traceback # 상세 에러 추적을 위한 모듈 추가
+import google.generativeai as genai
+
+# Streamlit의 secrets에서 키를 가져오는 방식으로 변경
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
+except KeyError:
+    st.error("오류: Streamlit Secrets에 GEMINI_API_KEY가 설정되지 않았습니다!")
+    st.stop() # 키가 없으면 더 이상 진행하지 않고 멈춤
 
 # 현재 파일이 있는 디렉토리를 경로에 추가
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
