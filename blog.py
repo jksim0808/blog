@@ -28,4 +28,3 @@ if current_dir not in sys.path:
     sys.path.append(current_dir)
 
 # 이제 import를 시도합니다.
-from blog_bot import post_to_naver
