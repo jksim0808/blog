@@ -145,48 +145,50 @@ def post_to_naver(data):
             actions.send_keys(Keys.ENTER).perform()
             time.sleep(0.1)
 
-        # 8. 발행 버튼 누르기 전, 카테고리 자동 선택
+        # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
+        # 💡 카테고리 설정은 '발행' 버튼을 눌러야 나오는 우측 패널에 있습니다!
+        clicked_first = False
+        publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
+        for btn in publish_btns:
+            if btn.is_displayed() and btn.text.strip() == "발행":
+                ActionChains(driver).move_to_element(btn).click().perform()
+                clicked_first = True
+                break
+                
+        if not clicked_first:
+            # 버튼을 못 찾으면 스크린샷을 찍기 위해 강제로 에러를 발생시킵니다.
+            raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
+            
+        time.sleep(3) # 우측 설정 패널이 스르륵 열릴 때까지 대기
+
+        # 9. 패널 열린 후 카테고리 선택 (선택 안 되어 있을 경우 대비)
         try:
-            category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button")
-            category_btn.click()
+            # 설정 패널 내의 카테고리 선택 버튼 찾기
+            category_btn = driver.find_element(By.XPATH, "//button[contains(@class, 'se-category-button') or contains(@class, 'btn_select')]")
+            ActionChains(driver).move_to_element(category_btn).click().perform()
             time.sleep(1)
             
-            first_category = driver.find_element(By.CSS_SELECTOR, "ul.se-category-list > li:first-child")
-            first_category.click()
+            # 열린 목록 중 가장 첫 번째 카테고리 클릭
+            first_cat = driver.find_element(By.XPATH, "//ul[contains(@class, 'list_category') or contains(@class, 'se-category-list')]//li[1]")
+            ActionChains(driver).move_to_element(first_cat).click().perform()
             time.sleep(1)
         except:
+            # 만약 이미 기본 카테고리가 셋팅되어 있어서 버튼이 다르다면 조용히 패스합니다.
             pass
 
-        # 9. 첫 번째 '발행' 버튼 클릭 (우측 상단 툴바)
-        try:
-            publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
-            for btn in publish_btns:
-                if btn.is_displayed() and btn.text.strip() == "발행":
-                    ActionChains(driver).move_to_element(btn).click().perform()
-                    break
-            time.sleep(3) 
-        except Exception as e:
-            print("우측 상단 발행 버튼 클릭 실패:", e)
-
         # 10. 최종 '발행' 버튼 클릭 (우측 패널 하단)
-        try:
-            final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
-            for btn in reversed(final_btns):
-                if btn.is_displayed() and btn.text.strip() == "발행":
-                    ActionChains(driver).move_to_element(btn).click().perform()
-                    break
-            time.sleep(7) 
-        except Exception as e:
-            print("최종 발행 버튼 클릭 실패:", e)
+        clicked_final = False
+        final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
+        for btn in reversed(final_btns):
+            if btn.is_displayed() and btn.text.strip() == "발행":
+                ActionChains(driver).move_to_element(btn).click().perform()
+                clicked_final = True
+                break
+                
+        if not clicked_final:
+            raise Exception("우측 패널 하단의 최종 '발행' 버튼을 찾을 수 없습니다.")
             
-    except Exception as e: # <--- 이전 과정에서 실수로 지워졌던 짝꿍 구문입니다.
-        # 에러 발생 시 막힌 화면 캡처
-        driver.save_screenshot("error_screen.png")
-        raise e
-        
-    finally:
-        driver.quit()
-
+        time.sleep(7) # 서버에 완전히 저장되고 페이지가 넘어갈 때까지 넉넉히 대기
 # ---------------------------------------------------------
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
