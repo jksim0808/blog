@@ -13,8 +13,6 @@ import time
 import json
 import traceback
 import os
-import pyperclip
-
 
 # 이전 테스트에서 남은 사진들 삭제 (깨끗한 테스트를 위해)
 for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
@@ -121,35 +119,29 @@ def post_to_naver(data):
         except:
             pass
 
-      # 6. 제목 입력 (클립보드 활용)
+     # 6. 제목 입력 (자바스크립트 insertText 방식)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 1. 자바스크립트로 강제 포커스 주기
+        # 에디터 클릭 및 강제 포커스 (커서 깜빡임 활성화)
+        driver.execute_script("arguments[0].click();", title_box)
         driver.execute_script("arguments[0].focus();", title_box)
         time.sleep(0.5)
         
-        # 2. 클립보드에 제목 복사
-        pyperclip.copy(data['title'])
-        
-        # 3. ActionChains로 클릭 후 Ctrl+V (맥OS라면 Command+V로 변경 필요)
-        # 윈도우/리눅스 환경 기준
-        ActionChains(driver).move_to_element(title_box).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+        # OS 클립보드를 거치지 않고, 브라우저 내부 기능으로 '붙여넣기' 효과를 냅니다.
+        driver.execute_script("document.execCommand('insertText', false, arguments[0]);", data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력 (클립보드 활용)
+        # 7. 본문 입력 (자바스크립트 insertText 방식)
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
         
-        # 1. 자바스크립트로 강제 포커스 주기
+        driver.execute_script("arguments[0].click();", content_box)
         driver.execute_script("arguments[0].focus();", content_box)
         time.sleep(0.5)
         
-        # 2. 클립보드에 본문 전체 복사
-        pyperclip.copy(data['body'])
-        
-        # 3. ActionChains로 클릭 후 Ctrl+V
-        ActionChains(driver).move_to_element(content_box).click().key_down(Keys.CONTROL).send_keys('v').key_up(Keys.CONTROL).perform()
+        # 줄바꿈(\n)이 포함된 본문 전체를 한 번에 텍스트로 밀어 넣습니다.
+        driver.execute_script("document.execCommand('insertText', false, arguments[0]);", data['body'])
         time.sleep(1)
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         # 이번에는 가장 강력한 JS 클릭 방식으로 강제 우회 클릭합니다.
