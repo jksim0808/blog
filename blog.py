@@ -110,6 +110,25 @@ def post_to_naver(data):
             alert.accept()
             time.sleep(1)
             driver.switch_to.frame("mainFrame")
+            
+# 🚨 [도움말 팝업 끄기] 에디터 진입 후 튜토리얼 창이 화면을 가리면 끕니다.
+        time.sleep(2)
+        try:
+            # 1. 키보드의 ESC 키를 눌러서 창 닫기 시도
+            driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+            time.sleep(1)
+        except:
+            pass
+
+        try:
+            # 2. 우측 상단의 'X' 버튼이나 닫기 버튼을 직접 찾아서 클릭 시도
+            close_btns = driver.find_elements(By.CSS_SELECTOR, "button[class*='close'], button[class*='Close']")
+            if close_btns:
+                close_btns[0].click()
+                time.sleep(1)
+        except:
+            pass
+
         
         # 6. 제목 입력
         title_box = WebDriverWait(driver, 10).until(
