@@ -12,8 +12,7 @@ import time
 import json
 import traceback
 import os # 스크린샷 저장을 위한 모듈 추가
-from selenium.common.exceptions 
-import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
 
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
