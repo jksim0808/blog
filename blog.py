@@ -87,7 +87,7 @@ def post_to_naver(data):
         
         # ... (이 아래로는 기존 제목/본문 입력 코드 동일) ...
 
-        # 로그인 페이지 접속
+ 
 # 1. 로그인 페이지 접속
         driver.get("https://nid.naver.com/nidlogin.login")
         time.sleep(2)
@@ -107,14 +107,30 @@ def post_to_naver(data):
         actions.click(pw_input).pause(0.5).send_keys(naver_pw).perform()
         time.sleep(0.5)
 
-        # 4. 로그인 버튼 클릭
-        driver.find_element(By.ID, "log.login").click()
-        time.sleep(4)
-
         # 3. 로그인 버튼 클릭
         driver.find_element(By.ID, "log.login").click()
         time.sleep(4) # 로그인 완료 대기
 
+        # 4. 글쓰기 페이지로 직행 (주소 형식을 가장 확실한 방식으로 변경)
+        write_url = f"https://blog.naver.com/PostWriteForm.naver?blogId={naver_id}"
+        driver.get(write_url)
+        
+        # 🚨 [강력한 팝업 격추] 페이지 이동 후 최대 3초간 잠복하며 팝업이 뜨는지 감시합니다.
+        try:
+            # 팝업이 나타날 때까지 대기
+            WebDriverWait(driver, 3).until(EC.alert_is_present())
+            alert = driver.switch_to.alert
+            print(f"팝업 무시됨: {alert.text}") # 내부 로그용
+            alert.accept() # "확인"을 눌러서 팝업 닫기
+            time.sleep(1)
+        except:
+            pass # 3초 동안 아무 팝업도 안 뜨면 무사통과
+
+        time.sleep(5) # 스마트에디터가 완전히 켜질 때까지 대기
+
+        # 5. iframe 전환 (mainFrame 찾기)
+        driver.switch_to.frame("mainFrame")
+        
         # 글쓰기 페이지 이동
         write_url = f"https://blog.naver.com/{naver_id}/postwrite"
         
