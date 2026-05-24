@@ -119,33 +119,24 @@ def post_to_naver(data):
         except:
             pass
 
-    # 6. 제목 입력 (껍데기 내부의 실제 입력창 찾기)
-        title_container = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
+  # 6. 제목 입력 (p 태그 직접 타겟팅)
+        title_p = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-title-text p"))
         )
-        # 껍데기(div) 내부의 실제 편집 가능한(contenteditable) 요소를 콕 집어 찾습니다.
-        title_input = title_container.find_element(By.CSS_SELECTOR, "[contenteditable='true']")
+        # 껍데기가 아닌 진짜 글씨가 써지는 문단(p) 영역을 정확히 클릭합니다.
+        title_p.click() 
+        time.sleep(1) # 커서가 활성화될 때까지 잠깐 대기
         
-        # 화면에 잘 보이도록 끌어올린 뒤 네이티브 클릭 (커서 활성화)
-        driver.execute_script("arguments[0].scrollIntoView(true);", title_input)
-        time.sleep(0.5)
-        title_input.click() 
-        time.sleep(0.5)
-        
-        # 현재 깜빡이는 커서 위치에 바로 키보드 타이핑을 시작합니다.
         ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 7. 본문 입력 (껍데기 내부의 실제 입력창 찾기)
-        content_container = driver.find_element(By.CLASS_NAME, "se-content")
-        content_input = content_container.find_element(By.CSS_SELECTOR, "[contenteditable='true']")
+        # 7. 본문 입력 (p 태그 직접 타겟팅)
+        content_p = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".se-content p"))
+        )
+        content_p.click()
+        time.sleep(1)
         
-        driver.execute_script("arguments[0].scrollIntoView(true);", content_input)
-        time.sleep(0.5)
-        content_input.click()
-        time.sleep(0.5)
-        
-        # 본문을 한 줄씩 타이핑하며 엔터키를 칩니다 (사람이 치는 것과 100% 동일)
         for line in data['body'].split('\n'):
             ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
