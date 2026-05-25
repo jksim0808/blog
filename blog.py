@@ -8,10 +8,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
 import os
+import re
 
 # 이전 테스트 사진 삭제
 for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
@@ -19,7 +21,7 @@ for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_sc
         os.remove(file)
 
 # ---------------------------------------------------------
-# 1. Gemini API 글 생성 함수
+# 1. Gemini API 글 생성 함수 (이모지 금지 명령 추가!)
 # ---------------------------------------------------------
 def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
@@ -29,6 +31,7 @@ def get_blog_content(topic):
     
     prompt = f"""
     '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
+    ★경고★: 시스템 오류를 방지하기 위해 이모지(😀, 🚀 등)나 특수기호를 절대 사용하지 마세요! 오직 순수 한글, 영문, 숫자, 기본 문장 부호만 사용하세요.
     반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
     {{
         "title": "블로그 글 제목",
@@ -88,7 +91,11 @@ def post_to_naver(data):
 
         # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
-        driver.get(write_url)
+        try:
+            driver.get(write_url)
+        except UnexpectedAlertPresentException:
+            pass
+
         time.sleep(5)
 
         # 4. 방해 팝업 닫기
@@ -111,7 +118,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 상단 메뉴바 숨김 (가림막 제거)
+        # 💡 5. 상단 메뉴바 숨김 (가장 완벽했던 visibility: hidden 방식 유지)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -121,60 +128,27 @@ def post_to_naver(data):
         """)
         time.sleep(1)
 
-        # ⭐ 핵심: 재시도 루프 (이모지 에러 방어 + 백지 방어)
-        max_retries = 3
-        write_success = False
+        # ⭐ 핵심: 에러를 유발하는 이모지(BMP 외부 문자)를 파이썬에서 강제로 삭제
+        clean_title = re.sub(r'[^\u0000-\uFFFF]', '', data['title'])
+        clean_body = re.sub(r'[^\u0000-\uFFFF]', '', data['body'])
+
+        # 💡 6. 제목 입력 (아까 글씨가 꽉 차게 잘 써졌던 100% 동일한 ActionChains 코드)
+        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(clean_title).perform()
+        time.sleep(1)
+
+        # 💡 7. 본문 입력 (아까 글씨가 꽉 차게 잘 써졌던 100% 동일한 ActionChains 코드)
+        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
         
-        for attempt in range(max_retries):
-            print(f"--- 봇 타자 입력 시도 중... ({attempt + 1}/{max_retries}) ---")
+        for line in clean_body.split('\n'):
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            time.sleep(0.05)
             
-            # 💡 1. 제목 입력 (이모지 에러를 피하는 자바스크립트 주입 방식)
-            title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-            driver.execute_script("""
-                var titleEl = document.querySelector('.se-title-text p') || document.querySelector('.se-title-text span') || document.querySelector('.se-title-text');
-                if(titleEl) {
-                    titleEl.innerText = arguments[0];
-                }
-            """, data['title'])
-            time.sleep(0.5)
-            # 네이버의 '백지화(해킹 방어)'를 뚫기 위해 제목 끝에 진짜 키보드로 스페이스바(공백)를 하나 추가하여 속임
-            driver.execute_script("arguments[0].click();", title_box)
-            driver.switch_to.active_element.send_keys(" ") 
-            time.sleep(1)
-            
-            # 💡 2. 본문 입력 (이모지 에러를 피하는 자바스크립트 주입 방식)
-            content_box = driver.find_element(By.CLASS_NAME, "se-content")
-            driver.execute_script("""
-                var contentEl = document.querySelector('.se-content p') || document.querySelector('.se-content span') || document.querySelector('.se-content');
-                if(contentEl) {
-                    var formattedText = arguments[0].replace(/\\n/g, '<br>');
-                    contentEl.innerHTML = formattedText;
-                }
-            """, data['body'])
-            time.sleep(0.5)
-            # 네이버의 '백지화(해킹 방어)'를 뚫기 위해 본문 끝에 진짜 키보드로 스페이스바(공백)를 하나 추가하여 속임
-            driver.execute_script("arguments[0].click();", content_box)
-            driver.switch_to.active_element.send_keys(" ") 
-            time.sleep(1.5)
-            
-            # 💡 3. 입력 검증
-            title_text = driver.execute_script("return document.querySelector('.se-title-text').innerText;")
-            content_text = driver.execute_script("return document.querySelector('.se-content').innerText;")
-            
-            if title_text and len(title_text.strip()) > 2 and content_text and len(content_text.strip()) > 10:
-                write_success = True
-                break # 글씨가 꽉 찼으므로 루프 탈출!
-                
-            print("입력 씹힘(백지화) 감지! 페이지를 새로고침하고 다시 시도합니다.")
-            driver.refresh()
-            time.sleep(5)
-
-        if not write_success:
-            raise Exception("3번이나 재시도했지만 네이버 에디터 로딩 렉을 뚫지 못했습니다.")
-
+        time.sleep(1)
         driver.save_screenshot("step1_written.png")
 
-        # 상단 메뉴바 복구
+        # 8. 상단 메뉴바 복구
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -261,7 +235,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
             gen_time = time.time() - start_time
             st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
 
-        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다... (렉 걸리면 봇이 알아서 새로고침 합니다)"):
+        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
             step2_start = time.time()
             post_to_naver(post_data)
             post_time = time.time() - step2_start
