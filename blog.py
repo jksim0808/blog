@@ -119,50 +119,34 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (요소 직접 타겟팅 방식)
-        title_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
+# 6. 제목 입력 (껍데기가 아닌 실제 입력 칸인 'p' 태그를 정밀 조준)
+        title_p = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text p"))
         )
+        
         # JS 강제 클릭으로 에디터 활성화
-        driver.execute_script("arguments[0].click();", title_box)
+        driver.execute_script("arguments[0].click();", title_p)
         time.sleep(0.5)
         
-        # 💡 [핵심] 가상 커서를 거치지 않고, title_box 요소 '자체'에 직접 텍스트 전송
-        title_box.send_keys(data['title'])
+        # 정확한 하위 요소에 텍스트 전송
+        title_p.send_keys(data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력 (요소 직접 타겟팅 방식)
-        content_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
+        # 7. 본문 입력 (본문 역시 실제 입력 칸인 'p' 태그를 정밀 조준)
+        content_p = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-content p"))
         )
+        
         # JS 강제 클릭으로 에디터 활성화
-        driver.execute_script("arguments[0].click();", content_box)
+        driver.execute_script("arguments[0].click();", content_p)
         time.sleep(0.5)
         
-        # 💡 [핵심] 한 줄씩 쪼개지 않고, 본문 텍스트 덩어리를 content_box 요소에 직접 꽂아 넣기 (\n 자동 인식)
-        content_box.send_keys(data['body'])
+        # 본문 텍스트 덩어리를 한 번에 꽂아 넣기
+        content_p.send_keys(data['body'])
         time.sleep(1)
         
         # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
-        # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
-        clicked_first = False
-        publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
-        
-        for btn in publish_btns:
-            # 화면 표시 여부(is_displayed) 따지지 않고 무조건 JS 강제 클릭
-            if "발행" in btn.text:
-                driver.execute_script("arguments[0].click();", btn)
-                clicked_first = True
-                break
-                
-        if not clicked_first:
-            raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
-            
-        time.sleep(3) # 우측 설정 패널이 열릴 때까지 대기
-        
-        # 📸 [CCTV 2] 발행 패널 오픈 사진 (추가됨)
-        driver.save_screenshot("step2_panel.png")
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         clicked_first = False
