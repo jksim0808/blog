@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
-from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -72,6 +71,7 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
+        # 1. 로그인
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -79,82 +79,98 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
+        # 2. 내 블로그 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
+        # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
         driver.get(write_url)
         time.sleep(5)
 
-        # ⭐ 핵심: 글씨가 써질 때까지 최대 3번 "새로고침(F5)" 하며 반복하는 끈질긴 루프!
+        # 4. 방해 팝업 닫기
+        try:
+            alert = driver.switch_to.alert
+            alert.accept()
+            time.sleep(1)
+        except NoAlertPresentException:
+            pass
+
+        try:
+            WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
+            time.sleep(1)
+        except:
+            pass 
+
+        try:
+            driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
+            time.sleep(1)
+        except:
+            pass
+
+        # 상단 메뉴바 숨김 (가림막 제거)
+        driver.execute_script("""
+            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+            for (var i = 0; i < blockers.length; i++) {
+                blockers[i].style.visibility = 'hidden';
+            }
+            window.scrollTo(0, 0);
+        """)
+        time.sleep(1)
+
+        # ⭐ 핵심: 재시도 루프 (이모지 에러 방어 + 백지 방어)
         max_retries = 3
         write_success = False
         
         for attempt in range(max_retries):
             print(f"--- 봇 타자 입력 시도 중... ({attempt + 1}/{max_retries}) ---")
             
-            try:
-                alert = driver.switch_to.alert
-                alert.accept()
-                time.sleep(1)
-            except NoAlertPresentException:
-                pass
-
-            try:
-                WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
-            except:
-                pass 
-
-            try:
-                driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
-            except:
-                pass
-
-            # 상단 메뉴바 숨김 (가림막 제거)
-            driver.execute_script("""
-                var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-                for (var i = 0; i < blockers.length; i++) {
-                    blockers[i].style.visibility = 'hidden';
-                }
-                window.scrollTo(0, 0);
-            """)
-            time.sleep(1)
-
-            # 1. 제목 입력 (가장 확실한 JS 클릭 + 활성 커서 타이핑)
+            # 💡 1. 제목 입력 (이모지 에러를 피하는 자바스크립트 주입 방식)
             title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+            driver.execute_script("""
+                var titleEl = document.querySelector('.se-title-text p') || document.querySelector('.se-title-text span') || document.querySelector('.se-title-text');
+                if(titleEl) {
+                    titleEl.innerText = arguments[0];
+                }
+            """, data['title'])
+            time.sleep(0.5)
+            # 네이버의 '백지화(해킹 방어)'를 뚫기 위해 제목 끝에 진짜 키보드로 스페이스바(공백)를 하나 추가하여 속임
             driver.execute_script("arguments[0].click();", title_box)
-            time.sleep(1)
-            driver.switch_to.active_element.send_keys(data['title'])
+            driver.switch_to.active_element.send_keys(" ") 
             time.sleep(1)
             
-            # 입력 검증: 글자가 안 들어갔다면 렉이 걸린 것!
-            title_text = driver.execute_script("return arguments[0].innerText;", title_box)
-            if not title_text or len(title_text.strip()) < 2:
-                print("입력 씹힘 감지! 페이지를 새로고침하고 다시 시도합니다.")
-                driver.refresh()
-                time.sleep(5)
-                continue # 루프의 처음으로 돌아가 새로고침 후 다시 시작!
-
-            # 2. 본문 입력
+            # 💡 2. 본문 입력 (이모지 에러를 피하는 자바스크립트 주입 방식)
             content_box = driver.find_element(By.CLASS_NAME, "se-content")
+            driver.execute_script("""
+                var contentEl = document.querySelector('.se-content p') || document.querySelector('.se-content span') || document.querySelector('.se-content');
+                if(contentEl) {
+                    var formattedText = arguments[0].replace(/\\n/g, '<br>');
+                    contentEl.innerHTML = formattedText;
+                }
+            """, data['body'])
+            time.sleep(0.5)
+            # 네이버의 '백지화(해킹 방어)'를 뚫기 위해 본문 끝에 진짜 키보드로 스페이스바(공백)를 하나 추가하여 속임
             driver.execute_script("arguments[0].click();", content_box)
-            time.sleep(1)
-            
-            active_cursor = driver.switch_to.active_element
-            for line in data['body'].split('\n'):
-                active_cursor.send_keys(line)
-                active_cursor.send_keys(Keys.ENTER)
-                time.sleep(0.05)
-                
+            driver.switch_to.active_element.send_keys(" ") 
             time.sleep(1.5)
-            write_success = True
-            break # 성공했으므로 지긋지긋한 반복문을 탈출합니다!
+            
+            # 💡 3. 입력 검증
+            title_text = driver.execute_script("return document.querySelector('.se-title-text').innerText;")
+            content_text = driver.execute_script("return document.querySelector('.se-content').innerText;")
+            
+            if title_text and len(title_text.strip()) > 2 and content_text and len(content_text.strip()) > 10:
+                write_success = True
+                break # 글씨가 꽉 찼으므로 루프 탈출!
+                
+            print("입력 씹힘(백지화) 감지! 페이지를 새로고침하고 다시 시도합니다.")
+            driver.refresh()
+            time.sleep(5)
 
         if not write_success:
-            raise Exception("3번이나 새로고침하며 재시도했지만 네이버 에디터 로딩 렉을 뚫지 못했습니다.")
+            raise Exception("3번이나 재시도했지만 네이버 에디터 로딩 렉을 뚫지 못했습니다.")
 
         driver.save_screenshot("step1_written.png")
 
