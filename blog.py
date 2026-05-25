@@ -119,37 +119,32 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가림막 철거 코드 전부 삭제!)
+# 6. 제목 입력 (요소 직접 타겟팅 방식)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        
-        # 💡 핵심 1: JS 강제 클릭으로 방해물을 무시하고 즉시 커서 활성화
+        # JS 강제 클릭으로 에디터 활성화
         driver.execute_script("arguments[0].click();", title_box)
-        time.sleep(1)
+        time.sleep(0.5)
         
-        # 활성화된 커서 위치에 바로 타이핑
-        ActionChains(driver).send_keys(data['title']).perform()
+        # 💡 [핵심] 가상 커서를 거치지 않고, title_box 요소 '자체'에 직접 텍스트 전송
+        title_box.send_keys(data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력
+        # 7. 본문 입력 (요소 직접 타겟팅 방식)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
-        
-        # JS 강제 클릭으로 본문 영역 활성화
+        # JS 강제 클릭으로 에디터 활성화
         driver.execute_script("arguments[0].click();", content_box)
+        time.sleep(0.5)
+        
+        # 💡 [핵심] 한 줄씩 쪼개지 않고, 본문 텍스트 덩어리를 content_box 요소에 직접 꽂아 넣기 (\n 자동 인식)
+        content_box.send_keys(data['body'])
         time.sleep(1)
         
-        # 본문 한 줄씩 타이핑
-        for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
-            
-        time.sleep(1)
         # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
-
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         clicked_first = False
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
