@@ -116,30 +116,50 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 임시 숨김 (가림 현상 방지 - visibility: hidden 유지)
+        # 💡 5. 상단 메뉴바 숨김 (가림막 제거)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
                 blockers[i].style.visibility = 'hidden';
             }
-            window.scrollTo(0, 0);
         """)
         time.sleep(1)
 
-        # 💡 6. 제목 입력 (유령 태그 타겟팅 삭제, 큼직한 박스 클릭으로 롤백)
+        # 💡 6. 제목 입력 (★재시도 로직 탑재★: 허공에 쳐졌으면 다시 씁니다!)
         title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
-        time.sleep(1)
-
-        # 💡 7. 본문 입력 (유령 태그 타겟팅 삭제, 큼직한 박스 클릭으로 롤백)
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
-        
-        for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
+        for attempt in range(3):
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
+            time.sleep(1)
             
-        time.sleep(1)
+            ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
+            time.sleep(1)
+            
+            # 텍스트가 진짜 들어갔는지 검사
+            if len(title_box.text.strip()) > 0:
+                break # 성공했으면 탈출!
+            print(f"제목 입력 재시도 중... ({attempt+1}/3)")
+            time.sleep(1)
+
+        # 💡 7. 본문 입력 (★재시도 로직 탑재★)
+        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        for attempt in range(3):
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
+            time.sleep(1)
+            
+            ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
+            
+            for line in data['body'].split('\n'):
+                ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+                time.sleep(0.05)
+                
+            time.sleep(1.5)
+            
+            # 본문이 정상적으로 채워졌는지 검사 (10글자 이상이면 통과)
+            if len(content_box.text.strip()) > 10:
+                break
+            print(f"본문 입력 재시도 중... ({attempt+1}/3)")
+            time.sleep(1)
+            
         driver.save_screenshot("step1_written.png")
 
         # 8. 상단 메뉴바 복구
@@ -151,7 +171,7 @@ def post_to_naver(data):
         """)
         time.sleep(2)
 
-        # 9. 첫 번째 '발행' 버튼 클릭 (에러 방지용 자바스크립트 클릭)
+        # 9. 첫 번째 '발행' 버튼 클릭
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
@@ -166,7 +186,7 @@ def post_to_naver(data):
         time.sleep(3) 
         driver.save_screenshot("step2_panel.png")
 
-        # 10. 카테고리 선택 (404 에러 방지용)
+        # 10. 카테고리 선택
         try:
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
             driver.execute_script("arguments[0].click();", category_btn)
@@ -178,7 +198,7 @@ def post_to_naver(data):
         except Exception as e:
             pass
 
-        # 11. 최종 '발행' 버튼 클릭 (에러 방지용 자바스크립트 클릭)
+        # 11. 최종 '발행' 버튼 클릭
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
