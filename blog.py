@@ -6,9 +6,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
-from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -72,7 +70,6 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 로그인
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -80,23 +77,19 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
-        # 2. 내 블로그 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
         try:
             driver.get(write_url)
         except UnexpectedAlertPresentException:
             pass
-
         time.sleep(5)
 
-        # 4. 방해 팝업 닫기
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -116,7 +109,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 숨김 (가림막 제거)
+        # 상단 메뉴바 숨김
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -124,46 +117,33 @@ def post_to_naver(data):
             }
             window.scrollTo(0, 0);
         """)
-        time.sleep(2)
-
-        # ⭐ 6. 제목 입력 (정찰병 시스템: 입력 성공 여부 확인 후 타이핑)
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        for attempt in range(5):
-            ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
-            time.sleep(1.5)
-            
-            # 입력된 글자가 5자 이상이면 에디터가 정상 작동한 것! (루프 탈출)
-            if len(title_box.text.strip()) > 5:
-                break
-            
-            print(f"제목 에디터 로딩 대기 중... 재시도 ({attempt+1}/5)")
-            time.sleep(2) # 엔진이 켜질 때까지 2초 대기 후 다시 클릭
-
-        # ⭐ 7. 본문 입력 (정찰병 시스템)
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        for attempt in range(5):
-            # 먼저 '체크'라는 두 글자를 찔러 넣어봅니다.
-            ActionChains(driver).move_to_element(content_box).click().pause(1).send_keys("체크").perform()
-            time.sleep(1)
-            
-            # 네이버가 '체크'를 받아먹었는지 검사
-            if "체크" in content_box.text:
-                # 정상적으로 엔진이 켜졌으니, '체크'를 지우고 진짜 본문을 쏟아붓습니다!
-                ActionChains(driver).send_keys(Keys.BACKSPACE * 2).perform()
-                time.sleep(0.5)
-                
-                for line in data['body'].split('\n'):
-                    ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-                    time.sleep(0.05)
-                break
-            
-            print(f"본문 에디터 로딩 대기 중... 재시도 ({attempt+1}/5)")
-            time.sleep(2)
-            
         time.sleep(1)
+
+        # 💡 핵심 1: 제목 입력 (키보드 버림, Javascript로 HTML에 직접 주입)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+        driver.execute_script("""
+            var titleEl = document.querySelector('.se-title-text p') || document.querySelector('.se-title-text span') || document.querySelector('.se-title-text');
+            if(titleEl) {
+                titleEl.innerText = arguments[0]; // 텍스트 강제 삽입
+                titleEl.dispatchEvent(new Event('input', {bubbles: true})); // 네이버에 "입력됐음!" 거짓말하기
+            }
+        """, data['title'])
+        time.sleep(1)
+
+        # 💡 핵심 2: 본문 입력 (Javascript로 HTML에 직접 주입)
+        driver.execute_script("""
+            var contentEl = document.querySelector('.se-content p') || document.querySelector('.se-content span') || document.querySelector('.se-content');
+            if(contentEl) {
+                var formattedText = arguments[0].replace(/\\n/g, '<br>'); // 줄바꿈을 HTML 태그로 변환
+                contentEl.innerHTML = formattedText; // 본문 강제 삽입
+                contentEl.dispatchEvent(new Event('input', {bubbles: true})); // 네이버에 "입력됐음!" 거짓말하기
+            }
+        """, data['body'])
+        time.sleep(1)
+        
         driver.save_screenshot("step1_written.png")
 
-        # 8. 상단 메뉴바 복구
+        # 상단 메뉴바 복구
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -172,7 +152,7 @@ def post_to_naver(data):
         """)
         time.sleep(2)
 
-        # 9. 첫 번째 '발행' 버튼 클릭 (에러 없는 자바스크립트 클릭)
+        # 9. 첫 번째 '발행' 버튼 클릭
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
@@ -187,7 +167,7 @@ def post_to_naver(data):
         time.sleep(3) 
         driver.save_screenshot("step2_panel.png")
 
-        # 10. 카테고리 선택 (404 에러 방지용 필수)
+        # 10. 카테고리 선택
         try:
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
             driver.execute_script("arguments[0].click();", category_btn)
@@ -233,7 +213,6 @@ def post_to_naver(data):
 # 3. Streamlit 웹 UI
 # ---------------------------------------------------------
 st.set_page_config(page_title="블로그 자동 포스팅", page_icon="📝")
-
 st.title("📝 네이버 블로그 자동 포스팅 봇")
 
 topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 이동식 동물미용차 장점")
@@ -268,9 +247,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
 
     except Exception as e:
         st.error(f"❌ 작업 중 오류가 발생했습니다: {e}")
-        
         if os.path.exists("error_screen.png"):
             st.image("error_screen.png", caption="막혀버린 네이버 브라우저 화면 📸")
-            
         with st.expander("상세 에러 로그 보기 (디버깅용)"):
             st.code(traceback.format_exc())
