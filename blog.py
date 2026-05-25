@@ -119,44 +119,25 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (CDP를 이용한 브라우저 외부 물리 타격)
+# 6. 제목 입력 (가장 기본적이고 정직한 타자 입력 방식)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        
-        # 포커스 활성화 (요소 중앙으로 이동 후 클릭)
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
-        time.sleep(0.5)
         ActionChains(driver).move_to_element(title_box).click().perform()
         time.sleep(0.5)
-        
-        # 💡 [CDP 치트키] 자바스크립트를 거치지 않고, 크롬 브라우저 자체 기능으로 텍스트를 강제 삽입합니다.
-        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
+        ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 7. 본문 입력 (CDP 방식)
+        # 7. 본문 입력
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
-        
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
-        time.sleep(0.5)
         ActionChains(driver).move_to_element(content_box).click().perform()
         time.sleep(0.5)
         
-        # 본문 한 줄씩 입력
         for line in data['body'].split('\n'):
-            if line.strip(): # 빈 줄이 아니면 CDP로 텍스트 삽입
-                driver.execute_cdp_cmd("Input.insertText", {"text": line})
-            
-            # 줄바꿈(엔터)은 정석대로 키보드 액션 사용
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
-            time.sleep(0.1)
-            
-        time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진
-        driver.save_screenshot("step1_written.png")
-        # 8. 우측 상단 발행 버튼 클릭 (이후 로직은 기존 JS 강제 클릭 그대로 사용하시면 됩니다!)
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            time.sleep(0.05)
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         clicked_first = False
