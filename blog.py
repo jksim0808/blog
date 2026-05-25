@@ -116,7 +116,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 "완전 삭제" (이전 성공했던 display: none 방식으로 롤백)
+        # 💡 5. 상단 메뉴바 완전히 삭제 (가림 현상 방지)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -126,23 +126,31 @@ def post_to_naver(data):
         """)
         time.sleep(1)
 
-        # 6. 제목 입력 (유리창이 사라졌으니 정상적으로 클릭됨!)
+        # 💡 6. 제목 입력 (클릭 따로, 텍스트 주입 따로! 완벽 분리)
         title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
+        ActionChains(driver).move_to_element(title_box).click().perform()
+        time.sleep(1) # 커서가 깜빡일 때까지 확실히 기다립니다.
+        
+        # 시스템 레벨에서 텍스트를 강제로 복사-붙여넣기 합니다.
+        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
         time.sleep(1)
 
-        # 7. 본문 입력
+        # 💡 7. 본문 입력
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(1) # 커서 활성화 대기
         
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            if line.strip():
+                driver.execute_cdp_cmd("Input.insertText", {"text": line})
+            # 엔터키만 ActionChains로 칩니다.
+            ActionChains(driver).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         time.sleep(1)
         driver.save_screenshot("step1_written.png")
 
-        # 💡 8. 상단 메뉴바 "완전 복구" (발행 버튼 부활)
+        # 💡 8. 상단 메뉴바 복구 (발행 버튼 부활)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
