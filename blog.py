@@ -119,34 +119,62 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (껍데기가 아닌 실제 입력 칸인 'p' 태그를 정밀 조준)
-        title_p = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text p"))
+# 6. 제목 입력 (가림막 철거 후, 정석 ActionChains 방식 복구)
+        title_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # JS 강제 클릭으로 에디터 활성화
-        driver.execute_script("arguments[0].click();", title_p)
-        time.sleep(0.5)
-        
-        # 정확한 하위 요소에 텍스트 전송
-        title_p.send_keys(data['title'])
+        # 마우스 클릭을 가로막는 상단 메뉴바 싹 다 숨기기 (초기 방식)
+        driver.execute_script("""
+            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+            for (var i = 0; i < blockers.length; i++) {
+                blockers[i].style.display = 'none';
+            }
+        """)
         time.sleep(1)
 
-        # 7. 본문 입력 (본문 역시 실제 입력 칸인 'p' 태그를 정밀 조준)
-        content_p = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".se-content p"))
-        )
-        
-        # JS 강제 클릭으로 에디터 활성화
-        driver.execute_script("arguments[0].click();", content_p)
+        # 💡 [핵심 1] 클릭이 빗나가지 않도록 요소를 화면 중앙으로 강제 스크롤
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
         time.sleep(0.5)
         
-        # 본문 텍스트 덩어리를 한 번에 꽂아 넣기
-        content_p.send_keys(data['body'])
+        # 💡 [핵심 2] 클릭 후 0.5초를 쉬어야 네이버 에디터에 '커서'가 생깁니다. 그 후 타자 입력!
+        ActionChains(driver).move_to_element(title_box).click().perform()
+        time.sleep(0.5) 
+        ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
+
+        # 7. 본문 입력
+        content_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
+        )
         
+        # 본문 영역도 화면 중앙으로 확실히 끌어오기
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
+        time.sleep(0.5)
+        
+        # 본문 영역 클릭 후 커서 활성화 대기
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(0.5) 
+        
+        # 본문 한 줄씩 사람처럼 엔터 치며 입력
+        for line in data['body'].split('\n'):
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            time.sleep(0.05)
+            
+        time.sleep(1)
         # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
+
+        # 💡 발행 버튼을 누르기 위해 아까 숨겼던 상단 메뉴바 다시 보이게 복구
+        driver.execute_script("""
+            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+            for (var i = 0; i < blockers.length; i++) {
+                blockers[i].style.display = '';
+            }
+        """)
+        time.sleep(1)
+        
+        # 8. 우측 상단 발행 버튼 클릭 (이후 로직은 기존 JS 강제 클릭 그대로 사용하시면 됩니다!)
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         clicked_first = False
