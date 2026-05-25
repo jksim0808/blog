@@ -119,63 +119,40 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (커서 강제 삽입 후 타이핑)
+# 6. 제목 입력 (가상 키보드 포기 -> JS 붙여넣기 방식)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 봇이 헛발질하지 않게 화면 중앙으로 요소를 가져옵니다.
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
+        # 일단 제목 칸을 클릭하여 포커스(커서)를 줍니다.
+        title_box.click()
         time.sleep(0.5)
-
-        # 💡 [핵심 치트키] JS를 이용해 제목 칸 '내부'에 깜빡이는 커서를 강제로 꽂아 넣습니다.
-        driver.execute_script("""
-            var el = arguments[0];
-            el.focus();
-            var range = document.createRange();
-            var sel = window.getSelection();
-            range.selectNodeContents(el);
-            range.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(range);
-        """, title_box)
-        time.sleep(0.5)
-
-        # 커서가 활성화된 상태에서 안전하게 타이핑!
-        ActionChains(driver).send_keys(data['title']).perform()
+        
+        # 💡 [발상의 전환] send_keys 대신, 복사-붙여넣기 명령어(execCommand)로 텍스트 강제 주입
+        driver.execute_script("document.execCommand('insertText', false, arguments[0]);", data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력
+        # 7. 본문 입력 (마찬가지로 JS 붙여넣기 방식)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
-        # 본문 영역도 화면 중앙으로 가져옵니다.
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
+        # 본문 칸 클릭하여 포커스
+        content_box.click()
         time.sleep(0.5)
-
-        # 💡 본문 칸 '내부'에도 깜빡이는 커서를 강제로 꽂아 넣습니다.
-        driver.execute_script("""
-            var el = arguments[0];
-            el.focus();
-            var range = document.createRange();
-            var sel = window.getSelection();
-            range.selectNodeContents(el);
-            range.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(range);
-        """, content_box)
-        time.sleep(0.5)
-
-        # 본문 한 줄씩 타이핑 (엔터 포함)
+        
+        # 본문은 줄바꿈이 있으므로 한 줄씩 '붙여넣기 + 엔터' 조합 사용
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
+            if line.strip(): # 빈 줄이 아니면 텍스트 붙여넣기
+                driver.execute_script("document.execCommand('insertText', false, arguments[0]);", line)
+            
+            # 줄바꿈(엔터)만 예외적으로 키보드 액션 사용
+            ActionChains(driver).send_keys(Keys.ENTER).perform()
+            time.sleep(0.1)
             
         time.sleep(1)
         # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
-        
         # 8. 우측 상단 발행 버튼 클릭 (이후 로직은 기존 JS 강제 클릭 그대로 사용하시면 됩니다!)
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
