@@ -119,30 +119,32 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (React DOM 강제 주입 기법)
+# 6. 제목 입력 (정확한 텍스트 노드 타겟팅)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 💡 [핵심] 키보드를 쓰지 않고 HTML 자체를 조작한 뒤, React에 'input' 이벤트를 날려 저장시킵니다.
+        # 💡 innerHTML 대신 innerText를 사용하여 깔끔하게 텍스트만 꽂아 넣습니다.
         driver.execute_script("""
             var el = document.querySelector('.se-title-text [contenteditable="true"]') || document.querySelector('.se-title-text');
-            el.innerHTML = '<span>' + arguments[0] + '</span>';
+            el.innerText = arguments[0];
             el.dispatchEvent(new Event('input', { bubbles: true }));
         """, data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력 (React DOM 강제 주입 기법)
+        # 7. 본문 입력 (줄바꿈 완벽 복원)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
-        # 줄바꿈(\n)을 네이버 에디터가 인식하는 문단 태그(<p><span>)로 변환합니다.
+        # 💡 빈 줄이면 <br>을 넣어주고, 글씨가 있으면 <p><span>으로 감싸서 줄바꿈이 유지되게 만듭니다.
         formatted_body = ""
         for line in data['body'].split('\n'):
-            formatted_body += '<p><span>' + line + '</span></p>'
+            if line.strip() == "":
+                formatted_body += '<p><br></p>'
+            else:
+                formatted_body += '<p><span>' + line + '</span></p>'
             
-        # 본문 HTML을 덮어씌우고 역시 React에 이벤트를 발생시킵니다.
         driver.execute_script("""
             var el = document.querySelector('.se-main-container [contenteditable="true"]') || document.querySelector('.se-main-container') || document.querySelector('.se-content');
             el.innerHTML = arguments[0];
