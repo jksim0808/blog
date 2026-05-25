@@ -119,25 +119,39 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가장 기본적이고 정직한 타자 입력 방식)
+# 6. 제목 입력 (React DOM 강제 주입 기법)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        ActionChains(driver).move_to_element(title_box).click().perform()
-        time.sleep(0.5)
-        ActionChains(driver).send_keys(data['title']).perform()
+        
+        # 💡 [핵심] 키보드를 쓰지 않고 HTML 자체를 조작한 뒤, React에 'input' 이벤트를 날려 저장시킵니다.
+        driver.execute_script("""
+            var el = document.querySelector('.se-title-text [contenteditable="true"]') || document.querySelector('.se-title-text');
+            el.innerHTML = '<span>' + arguments[0] + '</span>';
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        """, data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력
+        # 7. 본문 입력 (React DOM 강제 주입 기법)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
-        ActionChains(driver).move_to_element(content_box).click().perform()
-        time.sleep(0.5)
         
+        # 줄바꿈(\n)을 네이버 에디터가 인식하는 문단 태그(<p><span>)로 변환합니다.
+        formatted_body = ""
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
+            formatted_body += '<p><span>' + line + '</span></p>'
+            
+        # 본문 HTML을 덮어씌우고 역시 React에 이벤트를 발생시킵니다.
+        driver.execute_script("""
+            var el = document.querySelector('.se-main-container [contenteditable="true"]') || document.querySelector('.se-main-container') || document.querySelector('.se-content');
+            el.innerHTML = arguments[0];
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        """, formatted_body)
+        time.sleep(1)
+        
+        # 📸 [CCTV 1] 본문 작성 완료 사진
+        driver.save_screenshot("step1_written.png")
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         clicked_first = False
