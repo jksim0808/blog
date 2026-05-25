@@ -21,7 +21,7 @@ for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_sc
         os.remove(file)
 
 # ---------------------------------------------------------
-# 1. Gemini API 글 생성 함수
+# 1. Gemini API 글 생성 함수 (수다쟁이 AI 필터링 추가!)
 # ---------------------------------------------------------
 def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
@@ -43,11 +43,17 @@ def get_blog_content(topic):
     response = model.generate_content(prompt)
     
     try:
-        content = json.loads(response.text)
-        return content
+        # ⭐ 핵심: 제미나이가 덧붙인 쓸데없는 말을 무시하고 { } 안의 JSON만 추출
+        match = re.search(r'\{.*\}', response.text, re.DOTALL)
+        if match:
+            clean_json = match.group(0)
+            return json.loads(clean_json)
+        else:
+            # 예비 파싱
+            clean_text = response.text.replace("```json", "").replace("```", "").strip()
+            return json.loads(clean_text)
     except json.JSONDecodeError:
-        clean_text = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_text)
+        raise Exception(f"AI가 데이터를 잘못 넘겨주었습니다. 다시 시도해주세요.\n(AI 응답 원본: {response.text})")
 
 # ---------------------------------------------------------
 # 2. 네이버 블로그 자동 발행 함수 (Selenium)
@@ -96,7 +102,7 @@ def post_to_naver(data):
         clean_title = re.sub(r'[^\u0000-\uFFFF]', '', data['title'])
         clean_body = re.sub(r'[^\u0000-\uFFFF]', '', data['body'])
 
-        # ⭐ 프레임(에디터) 내부로 안전하게 진입하고 대기하는 함수
+        # 프레임(에디터) 내부로 진입하고 대기하는 함수
         def enter_editor_and_wait():
             try:
                 alert = driver.switch_to.alert
@@ -105,11 +111,11 @@ def post_to_naver(data):
             except NoAlertPresentException:
                 pass
                 
-            driver.switch_to.default_content() # 초기화
+            driver.switch_to.default_content()
             WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
             
             print("에디터 프레임 진입 완료! 네이버 엔진이 켜질 때까지 10초간 대기합니다...")
-            time.sleep(10) # 💡 핵심: 클라우드의 느린 로딩을 극복하기 위한 10초간의 딥-슬립
+            time.sleep(10) # 💡 클라우드의 느린 로딩을 극복하기 위한 10초 딥-슬립
             
             try:
                 driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
@@ -147,18 +153,18 @@ def post_to_naver(data):
                 
             time.sleep(2)
             
-            # 💡 작성 검증
+            # 입력 검증
             title_text = driver.execute_script("return document.querySelector('.se-title-text').innerText;")
             content_text = driver.execute_script("return document.querySelector('.se-content').innerText;")
             
             if title_text and len(title_text.strip()) > 1 and content_text and len(content_text.strip()) > 5:
                 write_success = True
-                break # 꽉 찬 글씨 확인 완료! 탈출!
+                break # 꽉 찬 글씨 확인 완료!
                 
             print(f"입력 씹힘 감지! ({attempt+1}/{max_retries}) 페이지 새로고침 후 재시도합니다...")
             driver.refresh()
             time.sleep(5)
-            enter_editor_and_wait() # 💡 핵심: 새로고침 후 다시 프레임 안으로 진입!
+            enter_editor_and_wait() # 새로고침 후 다시 진입
 
         if not write_success:
             raise Exception("3번의 끈질긴 시도에도 네이버의 로딩 지연을 뚫지 못했습니다.")
