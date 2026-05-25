@@ -8,6 +8,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -115,7 +116,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 완전히 삭제 (가림 현상 완벽 차단)
+        # 💡 5. 상단 메뉴바 숨김 (글씨 잘 써졌을 때 썼던 완벽한 차단 방식)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -125,28 +126,24 @@ def post_to_naver(data):
         """)
         time.sleep(1)
 
-        # 💡 6. 제목 입력 (가장 투박하지만 확실한 정석 방식)
-        title_box = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, "se-title-text")))
-        title_box.click() # 클릭
-        time.sleep(0.5)
-        title_box.send_keys(data['title']) # 요소에 다이렉트로 전송!
+        # 💡 6. 제목 입력 (아까 글씨 꽉 찼던 그 코드 100% 동일 복구)
+        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+        ActionChains(driver).move_to_element(title_box).click().send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 💡 7. 본문 입력 (가장 투박하지만 확실한 정석 방식)
+        # 💡 7. 본문 입력 (아까 글씨 꽉 찼던 그 코드 100% 동일 복구)
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        content_box.click() # 클릭
+        ActionChains(driver).move_to_element(content_box).click().perform()
         time.sleep(0.5)
         
         for line in data['body'].split('\n'):
-            if line.strip():
-                content_box.send_keys(line)
-            content_box.send_keys(Keys.ENTER)
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         time.sleep(1)
         driver.save_screenshot("step1_written.png")
 
-        # 8. 상단 메뉴바 복구
+        # 💡 8. 상단 메뉴바 복구 (발행 버튼 다시 보이게 하기)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
