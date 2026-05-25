@@ -119,25 +119,17 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (정확하게 포커스 후 타이핑)
+# 6. 제목 입력 (가림막 철거 코드 전부 삭제!)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 상단 메뉴바 가림막 철거 (기존 유지)
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.display = 'none';
-            }
-            window.scrollTo(0, 0);
-        """)
+        # 💡 핵심 1: JS 강제 클릭으로 방해물을 무시하고 즉시 커서 활성화
+        driver.execute_script("arguments[0].click();", title_box)
         time.sleep(1)
         
-        # 💡 수정된 부분: ActionChains 대신 직접 요소 클릭 후 활성 커서에 텍스트 입력
-        title_box.click()
-        time.sleep(0.5)
-        driver.switch_to.active_element.send_keys(data['title'])
+        # 활성화된 커서 위치에 바로 타이핑
+        ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
         # 7. 본문 입력
@@ -145,18 +137,37 @@ def post_to_naver(data):
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
-        # 본문 영역 클릭하여 커서 활성화
-        content_box.click()
-        time.sleep(0.5)
+        # JS 강제 클릭으로 본문 영역 활성화
+        driver.execute_script("arguments[0].click();", content_box)
+        time.sleep(1)
         
-        # 💡 수정된 부분: 활성화된 텍스트 에디터 공간에 한 줄씩 직접 입력
-        active_cursor = driver.switch_to.active_element
+        # 본문 한 줄씩 타이핑
         for line in data['body'].split('\n'):
-            active_cursor.send_keys(line)
-            active_cursor.send_keys(Keys.ENTER)
+            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
             time.sleep(0.05)
             
         time.sleep(1)
+        # 📸 [CCTV 1] 본문 작성 완료 사진
+        driver.save_screenshot("step1_written.png")
+
+        # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
+        clicked_first = False
+        publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
+        
+        for btn in publish_btns:
+            # 화면 표시 여부(is_displayed) 따지지 않고 무조건 JS 강제 클릭
+            if "발행" in btn.text:
+                driver.execute_script("arguments[0].click();", btn)
+                clicked_first = True
+                break
+                
+        if not clicked_first:
+            raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
+            
+        time.sleep(3) # 우측 설정 패널이 열릴 때까지 대기
+        
+        # 📸 [CCTV 2] 발행 패널 오픈 사진 (추가됨)
+        driver.save_screenshot("step2_panel.png")
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
         clicked_first = False
