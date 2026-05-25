@@ -6,7 +6,9 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -84,63 +86,76 @@ def post_to_naver(data):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
         write_url = f"{my_actual_blog_url}/postwrite"
-        try:
-            driver.get(write_url)
-        except UnexpectedAlertPresentException:
-            pass
+        driver.get(write_url)
         time.sleep(5)
 
-        try:
-            alert = driver.switch_to.alert
-            alert.accept()
-            time.sleep(1)
-        except NoAlertPresentException:
-            pass
-
-        try:
-            WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
-            time.sleep(1)
-        except:
-            pass 
-
-        try:
-            driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
-            time.sleep(1)
-        except:
-            pass
-
-        # 상단 메뉴바 숨김
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.visibility = 'hidden';
-            }
-            window.scrollTo(0, 0);
-        """)
-        time.sleep(1)
-
-        # 💡 핵심 1: 제목 입력 (키보드 버림, Javascript로 HTML에 직접 주입)
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        driver.execute_script("""
-            var titleEl = document.querySelector('.se-title-text p') || document.querySelector('.se-title-text span') || document.querySelector('.se-title-text');
-            if(titleEl) {
-                titleEl.innerText = arguments[0]; // 텍스트 강제 삽입
-                titleEl.dispatchEvent(new Event('input', {bubbles: true})); // 네이버에 "입력됐음!" 거짓말하기
-            }
-        """, data['title'])
-        time.sleep(1)
-
-        # 💡 핵심 2: 본문 입력 (Javascript로 HTML에 직접 주입)
-        driver.execute_script("""
-            var contentEl = document.querySelector('.se-content p') || document.querySelector('.se-content span') || document.querySelector('.se-content');
-            if(contentEl) {
-                var formattedText = arguments[0].replace(/\\n/g, '<br>'); // 줄바꿈을 HTML 태그로 변환
-                contentEl.innerHTML = formattedText; // 본문 강제 삽입
-                contentEl.dispatchEvent(new Event('input', {bubbles: true})); // 네이버에 "입력됐음!" 거짓말하기
-            }
-        """, data['body'])
-        time.sleep(1)
+        # ⭐ 핵심: 글씨가 써질 때까지 최대 3번 "새로고침(F5)" 하며 반복하는 끈질긴 루프!
+        max_retries = 3
+        write_success = False
         
+        for attempt in range(max_retries):
+            print(f"--- 봇 타자 입력 시도 중... ({attempt + 1}/{max_retries}) ---")
+            
+            try:
+                alert = driver.switch_to.alert
+                alert.accept()
+                time.sleep(1)
+            except NoAlertPresentException:
+                pass
+
+            try:
+                WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
+            except:
+                pass 
+
+            try:
+                driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
+            except:
+                pass
+
+            # 상단 메뉴바 숨김 (가림막 제거)
+            driver.execute_script("""
+                var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+                for (var i = 0; i < blockers.length; i++) {
+                    blockers[i].style.visibility = 'hidden';
+                }
+                window.scrollTo(0, 0);
+            """)
+            time.sleep(1)
+
+            # 1. 제목 입력 (가장 확실한 JS 클릭 + 활성 커서 타이핑)
+            title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+            driver.execute_script("arguments[0].click();", title_box)
+            time.sleep(1)
+            driver.switch_to.active_element.send_keys(data['title'])
+            time.sleep(1)
+            
+            # 입력 검증: 글자가 안 들어갔다면 렉이 걸린 것!
+            title_text = driver.execute_script("return arguments[0].innerText;", title_box)
+            if not title_text or len(title_text.strip()) < 2:
+                print("입력 씹힘 감지! 페이지를 새로고침하고 다시 시도합니다.")
+                driver.refresh()
+                time.sleep(5)
+                continue # 루프의 처음으로 돌아가 새로고침 후 다시 시작!
+
+            # 2. 본문 입력
+            content_box = driver.find_element(By.CLASS_NAME, "se-content")
+            driver.execute_script("arguments[0].click();", content_box)
+            time.sleep(1)
+            
+            active_cursor = driver.switch_to.active_element
+            for line in data['body'].split('\n'):
+                active_cursor.send_keys(line)
+                active_cursor.send_keys(Keys.ENTER)
+                time.sleep(0.05)
+                
+            time.sleep(1.5)
+            write_success = True
+            break # 성공했으므로 지긋지긋한 반복문을 탈출합니다!
+
+        if not write_success:
+            raise Exception("3번이나 새로고침하며 재시도했지만 네이버 에디터 로딩 렉을 뚫지 못했습니다.")
+
         driver.save_screenshot("step1_written.png")
 
         # 상단 메뉴바 복구
@@ -230,7 +245,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
             gen_time = time.time() - start_time
             st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
 
-        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
+        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다... (렉 걸리면 봇이 알아서 새로고침 합니다)"):
             step2_start = time.time()
             post_to_naver(post_data)
             post_time = time.time() - step2_start
