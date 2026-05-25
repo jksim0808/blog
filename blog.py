@@ -14,9 +14,7 @@ import json
 import traceback
 import os
 
-# ---------------------------------------------------------
-# 이전 테스트 사진(CCTV) 초기화
-# ---------------------------------------------------------
+# 이전 테스트 사진 삭제
 for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
     if os.path.exists(file):
         os.remove(file)
@@ -53,7 +51,6 @@ def get_blog_content(topic):
 # 2. 네이버 블로그 자동 발행 함수 (Selenium)
 # ---------------------------------------------------------
 def post_to_naver(data):
-    # 크롬 옵션 설정 (봇 탐지 우회 및 헤드리스 설정)
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -75,7 +72,7 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 네이버 로그인 (쿠키 주입)
+        # 1. 로그인
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -83,14 +80,14 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
-        # 2. 내 블로그 메인으로 이동
+        # 2. 내 블로그 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # 3. 스마트에디터 글쓰기 페이지 진입
+        # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
         try:
             driver.get(write_url)
@@ -99,7 +96,7 @@ def post_to_naver(data):
 
         time.sleep(5)
 
-        # 4. 방해 팝업 및 프레임 처리
+        # 4. 방해 팝업 닫기
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -119,7 +116,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # ⭐ 핵심 1: 상단 메뉴바 임시 투명화 (마우스 클릭 가림 현상 및 좌표 밀림 완벽 방지)
+        # 5. 상단 메뉴바 숨김 (가림막 제거)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -127,25 +124,33 @@ def post_to_naver(data):
             }
             window.scrollTo(0, 0);
         """)
-        time.sleep(1)
+        time.sleep(2)
 
-        # ⭐ 핵심 2: 제목 입력 (클릭 후 커서 생성 대기 -> 타이핑)
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
-        time.sleep(1)
-
-        # ⭐ 핵심 3: 본문 입력
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
+        # 💡 6. 제목 입력 (내부 알맹이 타겟팅 + 커서 직접 타겟팅)
+        # 빈 공간을 누르지 않도록 가장 좁은 요소(p, span)를 클릭합니다.
+        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".se-title-text p, .se-title-text span")))
+        ActionChains(driver).move_to_element(title_box).click().perform()
+        time.sleep(1.5) # 커서가 나타날 때까지 확실하게 대기합니다.
         
+        # 현재 화면에서 깜빡이고 있는 커서를 콕 집어 글씨를 전송합니다.
+        driver.switch_to.active_element.send_keys(data['title'])
+        time.sleep(1)
+
+        # 💡 7. 본문 입력 (내부 알맹이 타겟팅 + 커서 직접 타겟팅)
+        content_box = driver.find_element(By.CSS_SELECTOR, ".se-content p, .se-content span")
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(1.5) # 커서 활성화 대기
+        
+        active_cursor = driver.switch_to.active_element
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            active_cursor.send_keys(line)
+            active_cursor.send_keys(Keys.ENTER)
             time.sleep(0.05)
             
         time.sleep(1)
-        driver.save_screenshot("step1_written.png") # [사진 1] 꽉 찬 본문 
+        driver.save_screenshot("step1_written.png")
 
-        # ⭐ 핵심 4: 상단 메뉴바 원상 복구 (발행 버튼 다시 보이기)
+        # 8. 상단 메뉴바 복구
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -154,7 +159,7 @@ def post_to_naver(data):
         """)
         time.sleep(2)
 
-        # ⭐ 핵심 5: 우측 상단 '발행' 버튼 클릭 (에러 없는 JS 클릭)
+        # 9. 첫 번째 '발행' 버튼 클릭 (에러 없는 자바스크립트 클릭)
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
@@ -167,9 +172,9 @@ def post_to_naver(data):
             raise Exception("우측 상단 '발행' 버튼을 찾을 수 없습니다.")
             
         time.sleep(3) 
-        driver.save_screenshot("step2_panel.png") # [사진 2] 발행 패널
+        driver.save_screenshot("step2_panel.png")
 
-        # ⭐ 핵심 6: 카테고리 선택 (404 에러 방지용 필수 절차)
+        # 10. 카테고리 선택 (404 에러 방지용)
         try:
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
             driver.execute_script("arguments[0].click();", category_btn)
@@ -179,9 +184,9 @@ def post_to_naver(data):
             driver.execute_script("arguments[0].click();", first_cat)
             time.sleep(1)
         except Exception as e:
-            pass # 카테고리 창을 못 찾아도 에러 내지 않고 기본값으로 진행
+            pass
 
-        # ⭐ 핵심 7: 최종 '발행' 버튼 클릭 (에러 없는 JS 클릭)
+        # 11. 최종 '발행' 버튼 클릭 (에러 없는 자바스크립트 클릭)
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
@@ -193,7 +198,7 @@ def post_to_naver(data):
         if not clicked_final:
             raise Exception("최종 '발행' 버튼을 찾을 수 없습니다.")
             
-        time.sleep(7) # 네이버 서버에 글이 올라가는 충분한 시간 확보
+        time.sleep(7) 
         
         try:
             alert = driver.switch_to.alert
@@ -201,7 +206,7 @@ def post_to_naver(data):
         except NoAlertPresentException:
             pass
 
-        driver.save_screenshot("step3_done.png") # [사진 3] 최종 전송 완료 화면
+        driver.save_screenshot("step3_done.png")
         time.sleep(2) 
         
     except Exception as e:
