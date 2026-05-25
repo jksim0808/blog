@@ -119,12 +119,12 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가림막 철거 후 정석 타이핑)
+# 6. 제목 입력 (정확하게 포커스 후 타이핑)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 💡 핵심 1: 마우스 클릭을 방해하는 네이버의 상단 툴바, 메뉴바를 싹 다 찾아내서 화면에서 지워버립니다.
+        # 상단 메뉴바 가림막 철거 (기존 유지)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -134,32 +134,28 @@ def post_to_naver(data):
         """)
         time.sleep(1)
         
-        # 💡 핵심 2: 방해물이 없어졌으니, 당당하게 진짜 마우스로 제목 칸을 클릭하고 즉시 타자를 칩니다!
-        ActionChains(driver).move_to_element(title_box).click().send_keys(data['title']).perform()
+        # 💡 수정된 부분: ActionChains 대신 직접 요소 클릭 후 활성 커서에 텍스트 입력
+        title_box.click()
+        time.sleep(0.5)
+        driver.switch_to.active_element.send_keys(data['title'])
         time.sleep(1)
 
         # 7. 본문 입력
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        content_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
+        )
         
-        # 본문 칸 마우스 클릭 (커서 활성화)
-        ActionChains(driver).move_to_element(content_box).click().perform()
+        # 본문 영역 클릭하여 커서 활성화
+        content_box.click()
         time.sleep(0.5)
         
-        # 한 줄씩 엔터키를 치며 사람과 100% 똑같은 방식으로 입력합니다.
+        # 💡 수정된 부분: 활성화된 텍스트 에디터 공간에 한 줄씩 직접 입력
+        active_cursor = driver.switch_to.active_element
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            active_cursor.send_keys(line)
+            active_cursor.send_keys(Keys.ENTER)
             time.sleep(0.05)
             
-        time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진 (이번엔 반드시 글씨가 꽉 차 있습니다!)
-        driver.save_screenshot("step1_written.png")
-       # 💡 [추가] 아까 숨겨뒀던 상단 메뉴바(발행 버튼 포함)를 다시 화면에 나타나게 복구합니다!
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.display = '';
-            }
-        """)
         time.sleep(1)
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
