@@ -119,38 +119,55 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가상 키보드 포기 -> JS 붙여넣기 방식)
+# 6. 제목 입력 (JS 가짜 붙여넣기 이벤트)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        
-        # 일단 제목 칸을 클릭하여 포커스(커서)를 줍니다.
-        title_box.click()
+        # 에디터 활성화 (클릭 에러 방지를 위해 JS 강제 클릭 사용)
+        driver.execute_script("arguments[0].click();", title_box)
         time.sleep(0.5)
-        
-        # 💡 [발상의 전환] send_keys 대신, 복사-붙여넣기 명령어(execCommand)로 텍스트 강제 주입
-        driver.execute_script("document.execCommand('insertText', false, arguments[0]);", data['title'])
+
+        # 💡 [궁극의 치트키] 브라우저 메모리에 가짜 클립보드 데이터를 만들고 '붙여넣기(Paste)' 이벤트를 강제로 터뜨립니다.
+        driver.execute_script("""
+            var text = arguments[0];
+            var target = arguments[1].querySelector('[contenteditable="true"]') || arguments[1];
+            target.focus();
+            
+            var dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            var pasteEvent = new ClipboardEvent('paste', {
+                clipboardData: dt,
+                bubbles: true,
+                cancelable: true
+            });
+            target.dispatchEvent(pasteEvent);
+        """, data['title'], title_box)
         time.sleep(1)
 
-        # 7. 본문 입력 (마찬가지로 JS 붙여넣기 방식)
+        # 7. 본문 입력 (JS 가짜 붙여넣기 이벤트)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
-        
-        # 본문 칸 클릭하여 포커스
-        content_box.click()
+        driver.execute_script("arguments[0].click();", content_box)
         time.sleep(0.5)
-        
-        # 본문은 줄바꿈이 있으므로 한 줄씩 '붙여넣기 + 엔터' 조합 사용
-        for line in data['body'].split('\n'):
-            if line.strip(): # 빈 줄이 아니면 텍스트 붙여넣기
-                driver.execute_script("document.execCommand('insertText', false, arguments[0]);", line)
+
+        # 본문도 텍스트 덩어리를 가짜 클립보드에 담아 한 방에 붙여넣기 합니다. (줄바꿈 자동 인식)
+        driver.execute_script("""
+            var text = arguments[0];
+            var target = arguments[1].querySelector('[contenteditable="true"]') || arguments[1];
+            target.focus();
             
-            # 줄바꿈(엔터)만 예외적으로 키보드 액션 사용
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
-            time.sleep(0.1)
-            
+            var dt = new DataTransfer();
+            dt.setData('text/plain', text);
+            var pasteEvent = new ClipboardEvent('paste', {
+                clipboardData: dt,
+                bubbles: true,
+                cancelable: true
+            });
+            target.dispatchEvent(pasteEvent);
+        """, data['body'], content_box)
         time.sleep(1)
+        
         # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
         # 8. 우측 상단 발행 버튼 클릭 (이후 로직은 기존 JS 강제 클릭 그대로 사용하시면 됩니다!)
