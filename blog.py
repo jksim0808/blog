@@ -176,6 +176,8 @@ def post_to_naver(data):
             raise Exception("우측 상단 '발행' 버튼을 화면에서 찾을 수 없습니다.")
             
         time.sleep(3) # 우측 설정 패널이 열릴 때까지 대기
+
+        driver.save_screenshot("step2_panel.png")
         # 9. 최종 '발행' 버튼 클릭 (우측 패널 하단)
         clicked_final = False
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
