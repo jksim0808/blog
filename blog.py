@@ -29,7 +29,7 @@ def get_blog_content(topic):
     
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-   prompt = f"""
+  prompt = f"""
     '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
     반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
     {{
