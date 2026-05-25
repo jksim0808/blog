@@ -116,7 +116,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 완전히 삭제 (성공했던 가림막 제거)
+        # 💡 5. 상단 메뉴바 완전히 삭제 (글씨가 써졌던 원본 방식 그대로!)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -126,14 +126,17 @@ def post_to_naver(data):
         """)
         time.sleep(1)
 
-        # 💡 6. 제목 입력 (★ 아까 완벽하게 성공했던 타자 치는 방식 롤백 ★)
+        # 💡 6. 제목 입력 (성공했던 ActionChains 방식 롤백 + 확실한 1초 대기)
         title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
+        ActionChains(driver).move_to_element(title_box).click().perform()
+        time.sleep(1) # 커서가 생길 때까지 무조건 기다림 (제목 누락 방지)
+        ActionChains(driver).send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 💡 7. 본문 입력 (★ 아까 완벽하게 성공했던 타자 치는 방식 롤백 ★)
+        # 💡 7. 본문 입력 (성공했던 ActionChains 방식 롤백)
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(1) # 커서 활성화 대기
         
         for line in data['body'].split('\n'):
             ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
