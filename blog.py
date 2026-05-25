@@ -29,12 +29,12 @@ def get_blog_content(topic):
     
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-    prompt = f"""
+   prompt = f"""
     '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
     반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
     {{
-        "title": "블로그 글 제목",
-        "body": "블로그 본문 내용 (HTML 태그 없이 줄바꿈은 \\n 으로 처리)",
+        "title": "블로그 글 제목 (HTML 없이 순수 텍스트)",
+        "body": "블로그 본문 내용 (단락 구분은 <p></p>로, 빈 줄은 <p><br></p>로, 중요한 단어는 <b>강조</b>하는 등 네이버 블로그에 적합한 완벽한 HTML 태그 형태로 작성해줘)",
         "tags": "#태그1 #태그2 #태그3"
     }}
     """
@@ -120,53 +120,37 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (리액트가 눈치채도록 확실하게 포커스 해제 이벤트 추가)
+# 6. 제목 입력 (태그 충돌 방지를 위해 순수 텍스트인 textContent 사용)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # JS로 제목을 넣은 뒤, blur() 이벤트를 발생시켜 "입력 끝났어!"라고 네이버에 쾅 박아줍니다.
         driver.execute_script("""
-            var titleEl = document.querySelector('.se-title-text [contenteditable="true"]') || document.querySelector('.se-title-text');
-            if(titleEl) {
-                titleEl.focus();
-                titleEl.innerHTML = '<span>' + arguments[0] + '</span>';
-                titleEl.dispatchEvent(new Event('input', { bubbles: true }));
-                titleEl.blur(); 
-            }
+            var titleWrapper = document.querySelector('.se-title-text');
+            var titleEl = titleWrapper.querySelector('[contenteditable="true"]') || titleWrapper;
+            titleEl.focus();
+            titleEl.textContent = arguments[0]; // 제목은 HTML 없이 순수 텍스트로 주입!
+            titleEl.dispatchEvent(new Event('input', { bubbles: true }));
+            titleEl.blur(); // 입력 완료 쾅!
         """, data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력 (마크다운 기호 변환 및 여백 정리)
+        # 7. 본문 입력 (제미나이가 정성껏 만든 HTML을 그대로 통째로 주입)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
-        formatted_body = ""
-        for line in data['body'].split('\n'):
-            line = line.strip()
-            if not line:
-                # 빈 줄이면 공간을 넓게 띄워줍니다 (엔터 효과)
-                formatted_body += '<p><br></p>'
-            else:
-                # 제미나이의 **강조** 텍스트를 실제 HTML 굵은 글씨(<strong>)로 변환합니다.
-                line = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
-                
-                # 문단(<p>)으로 감싸서 깔끔하게 넣습니다.
-                formatted_body += '<p><span>' + line + '</span></p>'
-            
         driver.execute_script("""
-            var bodyEl = document.querySelector('.se-main-container [contenteditable="true"]') || document.querySelector('.se-main-container') || document.querySelector('.se-content');
-            if(bodyEl) {
-                bodyEl.focus();
-                bodyEl.innerHTML = arguments[0];
-                bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
-                bodyEl.blur();
-            }
-        """, formatted_body)
+            var bodyWrapper = document.querySelector('.se-main-container') || document.querySelector('.se-content');
+            var bodyEl = bodyWrapper.querySelector('[contenteditable="true"]') || bodyWrapper;
+            bodyEl.focus();
+            bodyEl.innerHTML = arguments[0]; // AI가 만든 HTML을 본문에 그대로 덮어쓰기!
+            bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
+            bodyEl.blur(); // 입력 완료 쾅!
+        """, data['body'])
         time.sleep(1)
         
-        # 📸 [CCTV 1] 본문 작성 완료 사진 (이제 제목도 들어가고 글도 예쁠 겁니다!)
+        # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
