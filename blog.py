@@ -14,7 +14,9 @@ import json
 import traceback
 import os
 
-# 이전 테스트 사진 삭제
+# ---------------------------------------------------------
+# 이전 테스트 사진(CCTV) 초기화
+# ---------------------------------------------------------
 for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
     if os.path.exists(file):
         os.remove(file)
@@ -51,6 +53,7 @@ def get_blog_content(topic):
 # 2. 네이버 블로그 자동 발행 함수 (Selenium)
 # ---------------------------------------------------------
 def post_to_naver(data):
+    # 크롬 옵션 설정 (봇 탐지 우회 및 헤드리스 설정)
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
@@ -72,7 +75,7 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 쿠키 심기 (로그인)
+        # 1. 네이버 로그인 (쿠키 주입)
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -80,14 +83,14 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
-        # 2. 내 블로그 전용 우회 주소로 이동
+        # 2. 내 블로그 메인으로 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # 3. 글쓰기 전용 주소 직행
+        # 3. 스마트에디터 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
         try:
             driver.get(write_url)
@@ -96,7 +99,7 @@ def post_to_naver(data):
 
         time.sleep(5)
 
-        # 4. 팝업 및 iframe 처리
+        # 4. 방해 팝업 및 프레임 처리
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -116,7 +119,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 임시 숨김 (가림 현상 원천 차단, display 대신 visibility 사용으로 레이아웃 유지)
+        # ⭐ 핵심 1: 상단 메뉴바 임시 투명화 (마우스 클릭 가림 현상 및 좌표 밀림 완벽 방지)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -126,12 +129,12 @@ def post_to_naver(data):
         """)
         time.sleep(1)
 
-        # 💡 6. 제목 입력 (커서가 생성될 수 있도록 1초 대기 후 타이핑)
+        # ⭐ 핵심 2: 제목 입력 (클릭 후 커서 생성 대기 -> 타이핑)
         title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
         ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 7. 본문 입력 (성공했던 방식 유지)
+        # ⭐ 핵심 3: 본문 입력
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
         ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
         
@@ -140,24 +143,23 @@ def post_to_naver(data):
             time.sleep(0.05)
             
         time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진
-        driver.save_screenshot("step1_written.png")
+        driver.save_screenshot("step1_written.png") # [사진 1] 꽉 찬 본문 
 
-        # 💡 8. 상단 메뉴바 복구 (발행 버튼을 누르기 위해 다시 나타나게 함)
+        # ⭐ 핵심 4: 상단 메뉴바 원상 복구 (발행 버튼 다시 보이기)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
                 blockers[i].style.visibility = 'visible';
             }
         """)
-        time.sleep(1)
+        time.sleep(2)
 
-        # 💡 9. 첫 번째 '발행' 버튼 클릭 (진짜 마우스 클릭)
+        # ⭐ 핵심 5: 우측 상단 '발행' 버튼 클릭 (에러 없는 JS 클릭)
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
             if btn.is_displayed() and btn.text.strip() == "발행":
-                ActionChains(driver).move_to_element(btn).click().perform()
+                driver.execute_script("arguments[0].click();", btn)
                 clicked_first = True
                 break
                 
@@ -165,32 +167,41 @@ def post_to_naver(data):
             raise Exception("우측 상단 '발행' 버튼을 찾을 수 없습니다.")
             
         time.sleep(3) 
-        # 📸 [CCTV 2] 발행 패널 열린 상태 사진
-        driver.save_screenshot("step2_panel.png")
+        driver.save_screenshot("step2_panel.png") # [사진 2] 발행 패널
 
-        # 💡 10. 최종 '발행' 버튼 클릭 (진짜 마우스 클릭)
+        # ⭐ 핵심 6: 카테고리 선택 (404 에러 방지용 필수 절차)
+        try:
+            category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
+            driver.execute_script("arguments[0].click();", category_btn)
+            time.sleep(1)
+            
+            first_cat = driver.find_element(By.CSS_SELECTOR, ".list_category li, .se-category-list li")
+            driver.execute_script("arguments[0].click();", first_cat)
+            time.sleep(1)
+        except Exception as e:
+            pass # 카테고리 창을 못 찾아도 에러 내지 않고 기본값으로 진행
+
+        # ⭐ 핵심 7: 최종 '발행' 버튼 클릭 (에러 없는 JS 클릭)
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
             if btn.is_displayed() and btn.text.strip() == "발행":
-                ActionChains(driver).move_to_element(btn).click().perform()
+                driver.execute_script("arguments[0].click();", btn)
                 clicked_final = True
                 break
                 
         if not clicked_final:
             raise Exception("최종 '발행' 버튼을 찾을 수 없습니다.")
             
-        time.sleep(5) 
+        time.sleep(7) # 네이버 서버에 글이 올라가는 충분한 시간 확보
         
-        # (만약 제목 누락 등으로 경고 팝업이 뜬다면 무시하고 닫음)
         try:
             alert = driver.switch_to.alert
             alert.accept()
         except NoAlertPresentException:
             pass
 
-        # 📸 [CCTV 3] 최종 발행 처리 직후 사진
-        driver.save_screenshot("step3_done.png")
+        driver.save_screenshot("step3_done.png") # [사진 3] 최종 전송 완료 화면
         time.sleep(2) 
         
     except Exception as e:
@@ -228,7 +239,6 @@ if st.button("글 생성 및 발행 시작", type="primary"):
             post_time = time.time() - step2_start
             st.success(f"🎉 블로그 발행 작업 완료! ({post_time:.1f}초 소요)")
 
-        # 작업 완료 후 과정 사진 보여주기
         st.write("### 📸 봇이 작업한 화면 로그 (CCTV)")
         cols = st.columns(3)
         if os.path.exists("step1_written.png"):
