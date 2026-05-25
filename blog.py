@@ -120,34 +120,55 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (태그 충돌 방지를 위해 순수 텍스트인 textContent 사용)
+# 6. 제목 입력 (JS 주입 + 스페이스바 트리거)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
+        # JS로 텍스트를 한 번에 꽂아 넣습니다.
         driver.execute_script("""
             var titleWrapper = document.querySelector('.se-title-text');
             var titleEl = titleWrapper.querySelector('[contenteditable="true"]') || titleWrapper;
             titleEl.focus();
-            titleEl.textContent = arguments[0]; // 제목은 HTML 없이 순수 텍스트로 주입!
-            titleEl.dispatchEvent(new Event('input', { bubbles: true }));
-            titleEl.blur(); // 입력 완료 쾅!
+            titleEl.innerHTML = '<span>' + arguments[0] + '</span>';
         """, data['title'])
+        time.sleep(0.5)
+        
+        # 💡 [핵심 치트키] 텍스트 주입 후, 키보드로 '스페이스바'를 누르고 '백스페이스'로 지웁니다!
+        # 네이버(React)가 이 키보드 신호를 받고 주입된 텍스트를 즉시 저장(Save)합니다.
+        ActionChains(driver).send_keys(Keys.SPACE).send_keys(Keys.BACKSPACE).perform()
         time.sleep(1)
 
-        # 7. 본문 입력 (제미나이가 정성껏 만든 HTML을 그대로 통째로 주입)
+        # 7. 본문 입력 (JS 주입 + 안전장치 + 스페이스바 트리거)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
+        # 만약 제미나이가 <p> 태그 없이 그냥 글씨만 줬을 경우를 대비한 '줄바꿈/굵은글씨 방어 코드'
+        body_html = data['body']
+        if "<p>" not in body_html:
+            import re
+            formatted_parts = []
+            for line in body_html.split('\n'):
+                line = line.strip()
+                if not line:
+                    formatted_parts.append('<p><br></p>')
+                else:
+                    line = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
+                    formatted_parts.append('<p><span>' + line + '</span></p>')
+            body_html = "".join(formatted_parts)
+            
+        # 완성된 HTML을 본문에 꽂아 넣습니다.
         driver.execute_script("""
             var bodyWrapper = document.querySelector('.se-main-container') || document.querySelector('.se-content');
             var bodyEl = bodyWrapper.querySelector('[contenteditable="true"]') || bodyWrapper;
             bodyEl.focus();
-            bodyEl.innerHTML = arguments[0]; // AI가 만든 HTML을 본문에 그대로 덮어쓰기!
-            bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
-            bodyEl.blur(); // 입력 완료 쾅!
-        """, data['body'])
+            bodyEl.innerHTML = arguments[0];
+        """, body_html)
+        time.sleep(0.5)
+        
+        # 💡 본문도 마찬가지로 스페이스바 -> 백스페이스로 렌더링 갱신을 터뜨립니다!
+        ActionChains(driver).send_keys(Keys.SPACE).send_keys(Keys.BACKSPACE).perform()
         time.sleep(1)
         
         # 📸 [CCTV 1] 본문 작성 완료 사진
