@@ -116,25 +116,24 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 숨김 (글씨 잘 써졌을 때 썼던 완벽한 차단 방식)
+        # 💡 5. 상단 메뉴바 임시 숨김 (가장 완벽했던 visibility: hidden 방식으로 완전 롤백!!!)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.display = 'none';
+                blockers[i].style.visibility = 'hidden';
             }
             window.scrollTo(0, 0);
         """)
         time.sleep(1)
 
-        # 💡 6. 제목 입력 (아까 글씨 꽉 찼던 그 코드 100% 동일 복구)
+        # 💡 6. 제목 입력 (가장 완벽했던 ActionChains.pause 방식 롤백)
         title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().send_keys(data['title']).perform()
+        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
         time.sleep(1)
 
-        # 💡 7. 본문 입력 (아까 글씨 꽉 찼던 그 코드 100% 동일 복구)
+        # 💡 7. 본문 입력 (가장 완벽했던 ActionChains.pause 방식 롤백)
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().perform()
-        time.sleep(0.5)
+        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
         
         for line in data['body'].split('\n'):
             ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
@@ -143,11 +142,11 @@ def post_to_naver(data):
         time.sleep(1)
         driver.save_screenshot("step1_written.png")
 
-        # 💡 8. 상단 메뉴바 복구 (발행 버튼 다시 보이게 하기)
+        # 8. 상단 메뉴바 복구
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.display = '';
+                blockers[i].style.visibility = 'visible';
             }
         """)
         time.sleep(2)
@@ -167,24 +166,27 @@ def post_to_naver(data):
         time.sleep(3) 
         driver.save_screenshot("step2_panel.png")
 
-        # 10. 카테고리 선택
+        # 10. 카테고리 선택 (ActionChains로 부드럽게 클릭)
         try:
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
-            driver.execute_script("arguments[0].click();", category_btn)
+            ActionChains(driver).move_to_element(category_btn).click().perform()
             time.sleep(1)
             
-            first_cat = driver.find_element(By.CSS_SELECTOR, ".list_category li, .se-category-list li")
-            driver.execute_script("arguments[0].click();", first_cat)
+            first_cat = driver.find_element(By.CSS_SELECTOR, ".list_category li:first-child, .se-category-list li:first-child")
+            ActionChains(driver).move_to_element(first_cat).click().perform()
             time.sleep(1)
         except Exception as e:
             pass
 
-        # 11. 최종 '발행' 버튼 클릭
+        # 11. 최종 '발행' 버튼 클릭 (에러 방지를 위해 ActionChains 시도 후 안되면 JS 클릭)
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
             if btn.is_displayed() and btn.text.strip() == "발행":
-                driver.execute_script("arguments[0].click();", btn)
+                try:
+                    ActionChains(driver).move_to_element(btn).click().perform()
+                except:
+                    driver.execute_script("arguments[0].click();", btn)
                 clicked_final = True
                 break
                 
