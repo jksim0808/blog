@@ -13,6 +13,7 @@ import time
 import json
 import traceback
 import os
+import re
 
 # 이전 테스트에서 남은 사진들 삭제 (깨끗한 테스트를 위해)
 for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
@@ -119,40 +120,53 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (정확한 텍스트 노드 타겟팅)
+# 6. 제목 입력 (리액트가 눈치채도록 확실하게 포커스 해제 이벤트 추가)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
         
-        # 💡 innerHTML 대신 innerText를 사용하여 깔끔하게 텍스트만 꽂아 넣습니다.
+        # JS로 제목을 넣은 뒤, blur() 이벤트를 발생시켜 "입력 끝났어!"라고 네이버에 쾅 박아줍니다.
         driver.execute_script("""
-            var el = document.querySelector('.se-title-text [contenteditable="true"]') || document.querySelector('.se-title-text');
-            el.innerText = arguments[0];
-            el.dispatchEvent(new Event('input', { bubbles: true }));
+            var titleEl = document.querySelector('.se-title-text [contenteditable="true"]') || document.querySelector('.se-title-text');
+            if(titleEl) {
+                titleEl.focus();
+                titleEl.innerHTML = '<span>' + arguments[0] + '</span>';
+                titleEl.dispatchEvent(new Event('input', { bubbles: true }));
+                titleEl.blur(); 
+            }
         """, data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력 (줄바꿈 완벽 복원)
+        # 7. 본문 입력 (마크다운 기호 변환 및 여백 정리)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
         
-        # 💡 빈 줄이면 <br>을 넣어주고, 글씨가 있으면 <p><span>으로 감싸서 줄바꿈이 유지되게 만듭니다.
         formatted_body = ""
         for line in data['body'].split('\n'):
-            if line.strip() == "":
+            line = line.strip()
+            if not line:
+                # 빈 줄이면 공간을 넓게 띄워줍니다 (엔터 효과)
                 formatted_body += '<p><br></p>'
             else:
+                # 제미나이의 **강조** 텍스트를 실제 HTML 굵은 글씨(<strong>)로 변환합니다.
+                line = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
+                
+                # 문단(<p>)으로 감싸서 깔끔하게 넣습니다.
                 formatted_body += '<p><span>' + line + '</span></p>'
             
         driver.execute_script("""
-            var el = document.querySelector('.se-main-container [contenteditable="true"]') || document.querySelector('.se-main-container') || document.querySelector('.se-content');
-            el.innerHTML = arguments[0];
-            el.dispatchEvent(new Event('input', { bubbles: true }));
+            var bodyEl = document.querySelector('.se-main-container [contenteditable="true"]') || document.querySelector('.se-main-container') || document.querySelector('.se-content');
+            if(bodyEl) {
+                bodyEl.focus();
+                bodyEl.innerHTML = arguments[0];
+                bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
+                bodyEl.blur();
+            }
         """, formatted_body)
         time.sleep(1)
         
-        # 📸 [CCTV 1] 본문 작성 완료 사진
+        # 📸 [CCTV 1] 본문 작성 완료 사진 (이제 제목도 들어가고 글도 예쁠 겁니다!)
         driver.save_screenshot("step1_written.png")
 
         # 8. 첫 번째 '발행' 버튼 클릭 (우측 상단)
