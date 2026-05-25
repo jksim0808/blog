@@ -15,11 +15,6 @@ import traceback
 import os
 import re
 
-# 이전 테스트 사진 삭제
-for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
-    if os.path.exists(file):
-        os.remove(file)
-
 # ---------------------------------------------------------
 # 1. Gemini API 글 생성 함수
 # ---------------------------------------------------------
@@ -101,7 +96,7 @@ def post_to_naver(data):
         clean_title = re.sub(r'[^\u0000-\uFFFF]', '', data['title'])
         clean_body = re.sub(r'[^\u0000-\uFFFF]', '', data['body'])
 
-        # ⭐ 프레임 진입 및 팝업(작성 중인 글) 제거 함수
+        # ⭐ 프레임 진입 및 팝업(작성 중인 글 등) 제거 함수
         def enter_editor_and_wait():
             try:
                 alert = driver.switch_to.alert
@@ -111,22 +106,30 @@ def post_to_naver(data):
                 pass
                 
             driver.switch_to.default_content()
-            WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
+            # 타임아웃 에러 방지를 위해 대기 시간을 15초로 넉넉하게 늘림
+            WebDriverWait(driver, 15).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
             
             print("에디터 프레임 진입 완료! 로딩 대기 및 팝업을 확인합니다...")
             time.sleep(5) 
             
-            # 🚨 핵심: "작성 중인 글이 있습니다" 팝업의 [취소] 버튼 찾아 누르기
+            # 🚨 핵심 수정: "작성 중인 글이 있습니다" 팝업 및 도움말 팝업 제거 (CSS Selector 방식)
             try:
-                cancel_btns = driver.find_elements(By.XPATH, "//button[contains(., '취소')] | //a[contains(., '취소')]")
-                for btn in cancel_btns:
-                    if btn.is_displayed():
-                        driver.execute_script("arguments[0].click();", btn)
-                        print("자동저장 팝업 [취소] 버튼 클릭 완료!")
-                        time.sleep(2)
-                        break
+                cancel_btn = driver.find_element(By.CSS_SELECTOR, ".se-popup-button.se-popup-button-cancel")
+                if cancel_btn.is_displayed():
+                    driver.execute_script("arguments[0].click();", cancel_btn)
+                    print("자동저장 팝업 [취소] 버튼 클릭 완료!")
+                    time.sleep(1)
             except Exception:
-                pass # 팝업이 없으면 그냥 넘어감
+                pass # 팝업이 없으면 조용히 넘어감
+
+            try:
+                help_close_btn = driver.find_element(By.CSS_SELECTOR, ".se-help-panel-close-button")
+                if help_close_btn.is_displayed():
+                    driver.execute_script("arguments[0].click();", help_close_btn)
+                    print("도움말 패널 닫기 완료!")
+                    time.sleep(1)
+            except Exception:
+                pass
             
             # 기타 방해 요소 숨김
             try:
@@ -258,6 +261,11 @@ st.title("📝 네이버 블로그 자동 포스팅 봇")
 topic = st.text_input("어떤 주제로 글을 쓸까요?", placeholder="예: 이동식 동물미용차 장점")
 
 if st.button("글 생성 및 발행 시작", type="primary"):
+    # 👉 수정됨: 버튼을 눌렀을 때만 이전 사진들이 삭제되도록 위치를 안쪽으로 옮겼습니다.
+    for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_screen.png"]:
+        if os.path.exists(file):
+            os.remove(file)
+
     if not topic:
         st.warning("주제를 입력해주세요!")
         st.stop()
