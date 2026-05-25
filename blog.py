@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
-from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -21,7 +20,7 @@ for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_sc
         os.remove(file)
 
 # ---------------------------------------------------------
-# 1. Gemini API 글 생성 함수 (이모지 금지 명령 추가!)
+# 1. Gemini API 글 생성 함수
 # ---------------------------------------------------------
 def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
@@ -74,7 +73,6 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 로그인
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -82,23 +80,16 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
-        # 2. 내 블로그 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
-        try:
-            driver.get(write_url)
-        except UnexpectedAlertPresentException:
-            pass
-
+        driver.get(write_url)
         time.sleep(5)
 
-        # 4. 방해 팝업 닫기
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -118,46 +109,72 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 숨김 (가장 완벽했던 visibility: hidden 방식 유지)
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.visibility = 'hidden';
-            }
-            window.scrollTo(0, 0);
-        """)
-        time.sleep(1)
-
-        # ⭐ 핵심: 에러를 유발하는 이모지(BMP 외부 문자)를 파이썬에서 강제로 삭제
+        # ⭐ 이모지 강제 필터링 (에러 방지)
         clean_title = re.sub(r'[^\u0000-\uFFFF]', '', data['title'])
         clean_body = re.sub(r'[^\u0000-\uFFFF]', '', data['body'])
 
-        # 💡 6. 제목 입력 (아까 글씨가 꽉 차게 잘 써졌던 100% 동일한 ActionChains 코드)
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(clean_title).perform()
-        time.sleep(1)
-
-        # 💡 7. 본문 입력 (아까 글씨가 꽉 차게 잘 써졌던 100% 동일한 ActionChains 코드)
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
+        # ==========================================
+        # ⭐ 핵심: 메뉴바 숨기기 꼼수를 버리고 '정중앙 스크롤' 도입
+        # ==========================================
+        max_retries = 3
+        write_success = False
         
-        for line in clean_body.split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
+        for attempt in range(max_retries):
+            print(f"--- 타자 입력 시도 중... ({attempt + 1}/{max_retries}) ---")
             
-        time.sleep(1)
+            # 1. 제목 입력
+            title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+            # 화면 정중앙으로 끌고 오기 (메뉴바에 가려지는 것 원천 차단)
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
+            time.sleep(1)
+            
+            # 자바스크립트로 클릭하여 커서 활성화
+            driver.execute_script("arguments[0].click();", title_box)
+            time.sleep(1)
+            # 활성화된 커서에 직접 키보드 타자 치기
+            driver.switch_to.active_element.send_keys(clean_title)
+            time.sleep(1)
+
+            # 2. 본문 입력
+            content_box = driver.find_element(By.CLASS_NAME, "se-content")
+            # 화면 정중앙으로 끌고 오기
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
+            time.sleep(1)
+            
+            # 자바스크립트로 클릭하여 커서 활성화
+            driver.execute_script("arguments[0].click();", content_box)
+            time.sleep(1)
+            
+            active_cursor = driver.switch_to.active_element
+            for line in clean_body.split('\n'):
+                active_cursor.send_keys(line)
+                active_cursor.send_keys(Keys.ENTER)
+                time.sleep(0.05)
+                
+            time.sleep(2)
+            
+            # 3. 입력 검증
+            title_text = driver.execute_script("return document.querySelector('.se-title-text').innerText;")
+            content_text = driver.execute_script("return document.querySelector('.se-content').innerText;")
+            
+            if title_text and len(title_text.strip()) > 1 and content_text and len(content_text.strip()) > 5:
+                write_success = True
+                break
+                
+            print("입력 씹힘 감지! 페이지 새로고침 후 재시도...")
+            driver.refresh()
+            time.sleep(5)
+
+        if not write_success:
+            raise Exception("3번의 재시도에도 에디터 렉을 뚫지 못했습니다.")
+
         driver.save_screenshot("step1_written.png")
 
-        # 8. 상단 메뉴바 복구
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.visibility = 'visible';
-            }
-        """)
-        time.sleep(2)
+        # 4. 발행 버튼 클릭을 위해 화면 최상단으로 스크롤
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)
 
-        # 9. 첫 번째 '발행' 버튼 클릭
+        # 5. 우측 상단 '발행' 버튼 클릭 (무조건 눌리는 JS 클릭)
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
@@ -172,9 +189,11 @@ def post_to_naver(data):
         time.sleep(3) 
         driver.save_screenshot("step2_panel.png")
 
-        # 10. 카테고리 선택
+        # 6. 카테고리 선택 (무조건 눌리는 JS 클릭)
         try:
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
+            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", category_btn)
+            time.sleep(0.5)
             driver.execute_script("arguments[0].click();", category_btn)
             time.sleep(1)
             
@@ -184,11 +203,13 @@ def post_to_naver(data):
         except Exception as e:
             pass
 
-        # 11. 최종 '발행' 버튼 클릭
+        # 7. 최종 '발행' 버튼 클릭
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
             if btn.is_displayed() and btn.text.strip() == "발행":
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+                time.sleep(0.5)
                 driver.execute_script("arguments[0].click();", btn)
                 clicked_final = True
                 break
@@ -235,7 +256,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
             gen_time = time.time() - start_time
             st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
 
-        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
+        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다... (렉 걸리면 알아서 재시도합니다)"):
             step2_start = time.time()
             post_to_naver(post_data)
             post_time = time.time() - step2_start
