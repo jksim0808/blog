@@ -196,8 +196,11 @@ def post_to_naver(data):
         
     except Exception as e:
         driver.save_screenshot("error_screen.png")
+         # 에러의 정확한 이름(타입)을 같이 출력하도록 수정
+        error_name = type(e).__name__
+        st.error(f"❌ 작업 중 오류가 발생했습니다: [{error_name}] {e}")
         raise e
-        
+       
     finally:
         driver.quit()
 
