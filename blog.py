@@ -31,6 +31,7 @@ def get_blog_content(topic):
     
     prompt = f"""
     '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
+    ★경고★: 시스템 오류 방지를 위해 이모지(😀, 🚀 등)나 특수기호를 절대 사용하지 마세요! 오직 순수 한글, 영문, 숫자, 기본 문장 부호만 사용하세요.
     반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
     {{
         "title": "블로그 글 제목",
@@ -73,7 +74,7 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
-        # 1. 로그인
+        # 1. 로그인 및 이동
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -81,72 +82,90 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
-        # 2. 내 블로그 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
-        # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
-        try:
-            driver.get(write_url)
-        except UnexpectedAlertPresentException:
-            pass
-
+        driver.get(write_url)
         time.sleep(5)
 
-        # 4. 방해 팝업 닫기
-        try:
-            alert = driver.switch_to.alert
-            alert.accept()
-            time.sleep(1)
-        except NoAlertPresentException:
-            pass
-
-        try:
-            WebDriverWait(driver, 5).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
-            time.sleep(1)
-        except:
-            pass 
-
-        try:
-            driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
-            time.sleep(1)
-        except:
-            pass
-
-        # ⭐ 회원님이 성공하셨던 완벽한 '메뉴바 투명화' 코드 원상복구
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.visibility = 'hidden';
-            }
-            window.scrollTo(0, 0);
-        """)
-        time.sleep(1)
-
-        # 에러 방지용 이모지 제거 필터링
+        # 에러 방지용 텍스트 정제 (이모지 삭제)
         clean_title = re.sub(r'[^\u0000-\uFFFF]', '', data['title'])
         clean_body = re.sub(r'[^\u0000-\uFFFF]', '', data['body'])
 
-        # ⭐ 회원님이 성공하셨던 완벽한 'ActionChains' 타자 코드 원상복구
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(clean_title).perform()
-        time.sleep(1)
-
-        content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
-        
-        for line in clean_body.split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
-            time.sleep(0.05)
+        # ⭐ 프레임(에디터) 내부로 안전하게 진입하고 대기하는 함수
+        def enter_editor_and_wait():
+            try:
+                alert = driver.switch_to.alert
+                alert.accept()
+                time.sleep(1)
+            except NoAlertPresentException:
+                pass
+                
+            driver.switch_to.default_content() # 초기화
+            WebDriverWait(driver, 10).until(EC.frame_to_be_available_and_switch_to_it("mainFrame"))
             
-        time.sleep(1)
+            print("에디터 프레임 진입 완료! 네이버 엔진이 켜질 때까지 10초간 대기합니다...")
+            time.sleep(10) # 💡 핵심: 클라우드의 느린 로딩을 극복하기 위한 10초간의 딥-슬립
+            
+            try:
+                driver.execute_script("document.querySelectorAll('[class*=\"help\"], [class*=\"guide\"], [class*=\"popup\"], [class*=\"layer\"], [class*=\"dimmed\"]').forEach(el => el.style.display = 'none');")
+            except:
+                pass
+
+        # 최초 진입
+        enter_editor_and_wait()
+
+        max_retries = 3
+        write_success = False
+        
+        for attempt in range(max_retries):
+            # 메뉴바 투명화 (가림막 제거)
+            driver.execute_script("""
+                var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
+                for (var i = 0; i < blockers.length; i++) {
+                    blockers[i].style.visibility = 'hidden';
+                }
+                window.scrollTo(0, 0);
+            """)
+            time.sleep(1)
+
+            # 제목 입력
+            title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+            ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(clean_title).perform()
+            time.sleep(1)
+
+            # 본문 입력
+            content_box = driver.find_element(By.CLASS_NAME, "se-content")
+            ActionChains(driver).move_to_element(content_box).click().pause(1).perform()
+            for line in clean_body.split('\n'):
+                ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+                time.sleep(0.05)
+                
+            time.sleep(2)
+            
+            # 💡 작성 검증
+            title_text = driver.execute_script("return document.querySelector('.se-title-text').innerText;")
+            content_text = driver.execute_script("return document.querySelector('.se-content').innerText;")
+            
+            if title_text and len(title_text.strip()) > 1 and content_text and len(content_text.strip()) > 5:
+                write_success = True
+                break # 꽉 찬 글씨 확인 완료! 탈출!
+                
+            print(f"입력 씹힘 감지! ({attempt+1}/{max_retries}) 페이지 새로고침 후 재시도합니다...")
+            driver.refresh()
+            time.sleep(5)
+            enter_editor_and_wait() # 💡 핵심: 새로고침 후 다시 프레임 안으로 진입!
+
+        if not write_success:
+            raise Exception("3번의 끈질긴 시도에도 네이버의 로딩 지연을 뚫지 못했습니다.")
+
         driver.save_screenshot("step1_written.png")
 
-        # 메뉴바 다시 나타나게 하기 (발행 버튼 누르기 위해)
+        # 메뉴바 복구
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -155,7 +174,7 @@ def post_to_naver(data):
         """)
         time.sleep(2)
 
-        # 첫 번째 '발행' 버튼 클릭
+        # 첫 번째 발행 버튼
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
@@ -165,7 +184,7 @@ def post_to_naver(data):
                 break
                 
         if not clicked_first:
-            raise Exception("우측 상단 '발행' 버튼을 찾을 수 없습니다.")
+            raise Exception("첫 번째 '발행' 버튼을 찾을 수 없습니다.")
             
         time.sleep(3) 
         driver.save_screenshot("step2_panel.png")
@@ -182,7 +201,7 @@ def post_to_naver(data):
         except Exception as e:
             pass
 
-        # 최종 '발행' 버튼 클릭
+        # 최종 발행 버튼
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
@@ -233,7 +252,7 @@ if st.button("글 생성 및 발행 시작", type="primary"):
             gen_time = time.time() - start_time
             st.success(f"✅ 글 생성 완료! ({gen_time:.1f}초 소요)")
 
-        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다..."):
+        with st.spinner("2/2단계: 네이버 블로그에 접속하여 글을 쓰는 중입니다... (10초의 대기 시간이 있습니다)"):
             step2_start = time.time()
             post_to_naver(post_data)
             post_time = time.time() - step2_start
