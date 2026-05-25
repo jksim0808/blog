@@ -21,7 +21,7 @@ for file in ["step1_written.png", "step2_panel.png", "step3_done.png", "error_sc
         os.remove(file)
 
 # ---------------------------------------------------------
-# 1. Gemini API 글 생성 함수
+# 1. Gemini API 글 생성 함수 (HTML 프롬프트 적용 및 들여쓰기 수정 완료)
 # ---------------------------------------------------------
 def get_blog_content(topic):
     api_key = st.secrets["GEMINI_API_KEY"].strip()
@@ -29,7 +29,7 @@ def get_blog_content(topic):
     
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-  prompt = f"""
+    prompt = f"""
     '{topic}'에 대한 정보성 네이버 블로그 포스팅을 작성해줘.
     반드시 아래의 JSON 형식으로만 대답해. 다른 말은 절대 하지마.
     {{
