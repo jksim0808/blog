@@ -119,60 +119,37 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (가림막 철거 후, 정석 ActionChains 방식 복구)
-        title_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
+# 6. 제목 입력 (포장지가 아닌 '진짜 입력칸' 정밀 조준)
+        # se-title 클래스 내부에 숨어있는 contenteditable='true' 속성을 가진 진짜 요소를 찾습니다.
+        title_input = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//*[contains(@class, 'se-title')]//*[@contenteditable='true'] | //*[contains(@class, 'se-title-text') and @contenteditable='true']"))
         )
         
-        # 마우스 클릭을 가로막는 상단 메뉴바 싹 다 숨기기 (초기 방식)
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.display = 'none';
-            }
-        """)
-        time.sleep(1)
-
-        # 💡 [핵심 1] 클릭이 빗나가지 않도록 요소를 화면 중앙으로 강제 스크롤
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
+        # 찾은 알맹이에 JS로 직접 포커스를 주고 타자를 칩니다.
+        driver.execute_script("arguments[0].focus();", title_input)
         time.sleep(0.5)
-        
-        # 💡 [핵심 2] 클릭 후 0.5초를 쉬어야 네이버 에디터에 '커서'가 생깁니다. 그 후 타자 입력!
-        ActionChains(driver).move_to_element(title_box).click().perform()
-        time.sleep(0.5) 
-        ActionChains(driver).send_keys(data['title']).perform()
+        title_input.send_keys(data['title'])
         time.sleep(1)
 
-        # 7. 본문 입력
-        content_box = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
+        # 7. 본문 입력 (본문 역시 '진짜 입력칸' 정밀 조준)
+        # se-content (본문 영역) 내부에 숨어있는 contenteditable='true' 요소를 찾습니다.
+        content_input = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//*[contains(@class, 'se-content')]//*[@contenteditable='true'] | //*[contains(@class, 'se-main-container')]//*[@contenteditable='true']"))
         )
         
-        # 본문 영역도 화면 중앙으로 확실히 끌어오기
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
+        # 찾은 알맹이에 JS로 포커스를 줍니다.
+        driver.execute_script("arguments[0].focus();", content_input)
         time.sleep(0.5)
         
-        # 본문 영역 클릭 후 커서 활성화 대기
-        ActionChains(driver).move_to_element(content_box).click().perform()
-        time.sleep(0.5) 
-        
-        # 본문 한 줄씩 사람처럼 엔터 치며 입력
+        # 한 줄씩 본문 텍스트 밀어넣기
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            content_input.send_keys(line)
+            content_input.send_keys(Keys.ENTER)
             time.sleep(0.05)
             
         time.sleep(1)
-        # 📸 [CCTV 1] 본문 작성 완료 사진
+        # 📸 [CCTV 1] 본문 작성 완료 사진 (이번엔 반드시 텍스트가 꽉 차 있습니다!)
         driver.save_screenshot("step1_written.png")
-
-        # 💡 발행 버튼을 누르기 위해 아까 숨겼던 상단 메뉴바 다시 보이게 복구
-        driver.execute_script("""
-            var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
-            for (var i = 0; i < blockers.length; i++) {
-                blockers[i].style.display = '';
-            }
-        """)
-        time.sleep(1)
         
         # 8. 우측 상단 발행 버튼 클릭 (이후 로직은 기존 JS 강제 클릭 그대로 사용하시면 됩니다!)
 
