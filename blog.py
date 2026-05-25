@@ -72,6 +72,7 @@ def post_to_naver(data):
         nid_aut = st.secrets["NAVER_NID_AUT"].strip()
         nid_ses = st.secrets["NAVER_NID_SES"].strip()
 
+        # 1. 로그인
         driver.get("https://www.naver.com")
         time.sleep(2)
         driver.add_cookie({"name": "NID_AUT", "value": nid_aut, "domain": ".naver.com"})
@@ -79,12 +80,14 @@ def post_to_naver(data):
         driver.refresh()
         time.sleep(2)
 
+        # 2. 내 블로그 이동
         driver.get("https://blog.naver.com/MyBlog.naver")
         time.sleep(3)
         my_actual_blog_url = driver.current_url 
         if my_actual_blog_url.endswith("/"):
             my_actual_blog_url = my_actual_blog_url[:-1]
 
+        # 3. 글쓰기 페이지 진입
         write_url = f"{my_actual_blog_url}/postwrite"
         try:
             driver.get(write_url)
@@ -93,6 +96,7 @@ def post_to_naver(data):
 
         time.sleep(5)
 
+        # 4. 방해 팝업 닫기
         try:
             alert = driver.switch_to.alert
             alert.accept()
@@ -112,6 +116,7 @@ def post_to_naver(data):
         except:
             pass
 
+        # 💡 5. 상단 메뉴바 숨김 (가림막 제거)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -119,32 +124,43 @@ def post_to_naver(data):
             }
             window.scrollTo(0, 0);
         """)
-        time.sleep(1)
-
-        # ⭐ 핵심 전략: 마우스를 버리고 '키보드 엔터키'로 본문까지 이동!
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        
-        # 1. 자바스크립트로 에러 없이 제목 칸 클릭 (커서 활성화)
-        driver.execute_script("arguments[0].click();", title_box)
-        time.sleep(1)
-
-        # 2. 오직 키보드 입력만 수행 (마우스 이동 삭제)
-        actions = ActionChains(driver)
-        actions.send_keys(data['title']) # 제목 치기
-        actions.pause(0.5)
-        actions.send_keys(Keys.ENTER)    # 엔터 치기! (네이버 에디터 특성상 본문으로 자동 이동됨)
-        actions.pause(1)
-        
-        # 본문 치기 (이미 커서가 넘어와 있음)
-        for line in data['body'].split('\n'):
-            if line.strip():
-                actions.send_keys(line)
-            actions.send_keys(Keys.ENTER)
-            actions.pause(0.05)
-            
-        actions.perform() # 이 모든 키보드 동작을 한 번에 실행!
         time.sleep(2)
-        
+
+        # ⭐ 6. 제목 입력 (정찰병 시스템: 입력 성공 여부 확인 후 타이핑)
+        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
+        for attempt in range(5):
+            ActionChains(driver).move_to_element(title_box).click().pause(1).send_keys(data['title']).perform()
+            time.sleep(1.5)
+            
+            # 입력된 글자가 5자 이상이면 에디터가 정상 작동한 것! (루프 탈출)
+            if len(title_box.text.strip()) > 5:
+                break
+            
+            print(f"제목 에디터 로딩 대기 중... 재시도 ({attempt+1}/5)")
+            time.sleep(2) # 엔진이 켜질 때까지 2초 대기 후 다시 클릭
+
+        # ⭐ 7. 본문 입력 (정찰병 시스템)
+        content_box = driver.find_element(By.CLASS_NAME, "se-content")
+        for attempt in range(5):
+            # 먼저 '체크'라는 두 글자를 찔러 넣어봅니다.
+            ActionChains(driver).move_to_element(content_box).click().pause(1).send_keys("체크").perform()
+            time.sleep(1)
+            
+            # 네이버가 '체크'를 받아먹었는지 검사
+            if "체크" in content_box.text:
+                # 정상적으로 엔진이 켜졌으니, '체크'를 지우고 진짜 본문을 쏟아붓습니다!
+                ActionChains(driver).send_keys(Keys.BACKSPACE * 2).perform()
+                time.sleep(0.5)
+                
+                for line in data['body'].split('\n'):
+                    ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+                    time.sleep(0.05)
+                break
+            
+            print(f"본문 에디터 로딩 대기 중... 재시도 ({attempt+1}/5)")
+            time.sleep(2)
+            
+        time.sleep(1)
         driver.save_screenshot("step1_written.png")
 
         # 8. 상단 메뉴바 복구
@@ -156,7 +172,7 @@ def post_to_naver(data):
         """)
         time.sleep(2)
 
-        # 9. 첫 번째 '발행' 버튼 클릭 (무조건 눌리는 JS 클릭)
+        # 9. 첫 번째 '발행' 버튼 클릭 (에러 없는 자바스크립트 클릭)
         publish_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_first = False
         for btn in publish_btns:
@@ -171,7 +187,7 @@ def post_to_naver(data):
         time.sleep(3) 
         driver.save_screenshot("step2_panel.png")
 
-        # 10. 카테고리 선택 (무조건 눌리는 JS 클릭)
+        # 10. 카테고리 선택 (404 에러 방지용 필수)
         try:
             category_btn = driver.find_element(By.CSS_SELECTOR, ".se-category-button, .btn_select")
             driver.execute_script("arguments[0].click();", category_btn)
@@ -183,7 +199,7 @@ def post_to_naver(data):
         except Exception as e:
             pass
 
-        # 11. 최종 '발행' 버튼 클릭 (무조건 눌리는 JS 클릭)
+        # 11. 최종 '발행' 버튼 클릭
         final_btns = driver.find_elements(By.XPATH, "//button[contains(., '발행')]")
         clicked_final = False
         for btn in reversed(final_btns):
