@@ -119,55 +119,41 @@ def post_to_naver(data):
         except:
             pass
 
-# 6. 제목 입력 (JS 가짜 붙여넣기 이벤트)
+# 6. 제목 입력 (CDP를 이용한 브라우저 외부 물리 타격)
         title_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-title-text"))
         )
-        # 에디터 활성화 (클릭 에러 방지를 위해 JS 강제 클릭 사용)
-        driver.execute_script("arguments[0].click();", title_box)
+        
+        # 포커스 활성화 (요소 중앙으로 이동 후 클릭)
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", title_box)
         time.sleep(0.5)
-
-        # 💡 [궁극의 치트키] 브라우저 메모리에 가짜 클립보드 데이터를 만들고 '붙여넣기(Paste)' 이벤트를 강제로 터뜨립니다.
-        driver.execute_script("""
-            var text = arguments[0];
-            var target = arguments[1].querySelector('[contenteditable="true"]') || arguments[1];
-            target.focus();
-            
-            var dt = new DataTransfer();
-            dt.setData('text/plain', text);
-            var pasteEvent = new ClipboardEvent('paste', {
-                clipboardData: dt,
-                bubbles: true,
-                cancelable: true
-            });
-            target.dispatchEvent(pasteEvent);
-        """, data['title'], title_box)
+        ActionChains(driver).move_to_element(title_box).click().perform()
+        time.sleep(0.5)
+        
+        # 💡 [CDP 치트키] 자바스크립트를 거치지 않고, 크롬 브라우저 자체 기능으로 텍스트를 강제 삽입합니다.
+        driver.execute_cdp_cmd("Input.insertText", {"text": data['title']})
         time.sleep(1)
 
-        # 7. 본문 입력 (JS 가짜 붙여넣기 이벤트)
+        # 7. 본문 입력 (CDP 방식)
         content_box = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "se-content"))
         )
-        driver.execute_script("arguments[0].click();", content_box)
-        time.sleep(0.5)
-
-        # 본문도 텍스트 덩어리를 가짜 클립보드에 담아 한 방에 붙여넣기 합니다. (줄바꿈 자동 인식)
-        driver.execute_script("""
-            var text = arguments[0];
-            var target = arguments[1].querySelector('[contenteditable="true"]') || arguments[1];
-            target.focus();
-            
-            var dt = new DataTransfer();
-            dt.setData('text/plain', text);
-            var pasteEvent = new ClipboardEvent('paste', {
-                clipboardData: dt,
-                bubbles: true,
-                cancelable: true
-            });
-            target.dispatchEvent(pasteEvent);
-        """, data['body'], content_box)
-        time.sleep(1)
         
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", content_box)
+        time.sleep(0.5)
+        ActionChains(driver).move_to_element(content_box).click().perform()
+        time.sleep(0.5)
+        
+        # 본문 한 줄씩 입력
+        for line in data['body'].split('\n'):
+            if line.strip(): # 빈 줄이 아니면 CDP로 텍스트 삽입
+                driver.execute_cdp_cmd("Input.insertText", {"text": line})
+            
+            # 줄바꿈(엔터)은 정석대로 키보드 액션 사용
+            ActionChains(driver).send_keys(Keys.ENTER).perform()
+            time.sleep(0.1)
+            
+        time.sleep(1)
         # 📸 [CCTV 1] 본문 작성 완료 사진
         driver.save_screenshot("step1_written.png")
         # 8. 우측 상단 발행 버튼 클릭 (이후 로직은 기존 JS 강제 클릭 그대로 사용하시면 됩니다!)
