@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
-from selenium.webdriver.common.action_chains import ActionChains
 import time
 import json
 import traceback
@@ -116,7 +115,7 @@ def post_to_naver(data):
         except:
             pass
 
-        # 💡 5. 상단 메뉴바 완전히 삭제 (글씨가 써졌던 원본 방식 그대로!)
+        # 💡 5. 상단 메뉴바 완전히 삭제 (가림 현상 완벽 차단)
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
@@ -126,26 +125,28 @@ def post_to_naver(data):
         """)
         time.sleep(1)
 
-        # 💡 6. 제목 입력 (성공했던 ActionChains 방식 롤백 + 확실한 1초 대기)
-        title_box = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, "se-title-text")))
-        ActionChains(driver).move_to_element(title_box).click().perform()
-        time.sleep(1) # 커서가 생길 때까지 무조건 기다림 (제목 누락 방지)
-        ActionChains(driver).send_keys(data['title']).perform()
+        # 💡 6. 제목 입력 (가장 투박하지만 확실한 정석 방식)
+        title_box = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, "se-title-text")))
+        title_box.click() # 클릭
+        time.sleep(0.5)
+        title_box.send_keys(data['title']) # 요소에 다이렉트로 전송!
         time.sleep(1)
 
-        # 💡 7. 본문 입력 (성공했던 ActionChains 방식 롤백)
+        # 💡 7. 본문 입력 (가장 투박하지만 확실한 정석 방식)
         content_box = driver.find_element(By.CLASS_NAME, "se-content")
-        ActionChains(driver).move_to_element(content_box).click().perform()
-        time.sleep(1) # 커서 활성화 대기
+        content_box.click() # 클릭
+        time.sleep(0.5)
         
         for line in data['body'].split('\n'):
-            ActionChains(driver).send_keys(line).send_keys(Keys.ENTER).perform()
+            if line.strip():
+                content_box.send_keys(line)
+            content_box.send_keys(Keys.ENTER)
             time.sleep(0.05)
             
         time.sleep(1)
         driver.save_screenshot("step1_written.png")
 
-        # 8. 상단 메뉴바 복구 (발행 버튼 부활)
+        # 8. 상단 메뉴바 복구
         driver.execute_script("""
             var blockers = document.querySelectorAll('header, [class*="header"], [class*="toolbar"], [class*="floating"], [class*="menu"]');
             for (var i = 0; i < blockers.length; i++) {
